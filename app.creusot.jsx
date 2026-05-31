@@ -253,41 +253,52 @@ async function fetchCoinGecko(){
    le Worker (/yahoo renvoie prevClose+pct1d ; CoinGecko renvoie pct1d).
    Perf portefeuille = Σ(val_i × pct24h_i) / Σ(val_i). */
 async function fetchPerf24h(src){
-  const out = { crypto:null, stocks:null, errors:[] };
-  const usdEur = src.usdEur || 0.92;
-  // --- Crypto via CoinGecko (pct 24h direct) ---
+  const out = { crypto:{d:null,w:null,m:null}, stocks:{d:null,w:null,m:null}, errors:[] };
+  // --- Crypto via CoinGecko markets (24h / 7d / 30d) ---
   try{
     const ids = (src.crypto.items||[]).map(x=>CG_MAP[x.t]).filter(Boolean);
     if(ids.length){
-      const u = "https://api.coingecko.com/api/v3/simple/price?ids="+ids.join(",")+"&vs_currencies=usd&include_24hr_change=true";
-      const r = await fetch(u,{signal:AbortSignal.timeout(8000)});
-      const d = await r.json();
-      let num=0, den=0;
+      const u = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids="+ids.join(",")
+        +"&price_change_percentage=24h,7d,30d";
+      const r = await fetch(u,{signal:AbortSignal.timeout(9000)});
+      const arr = await r.json();
+      const by = {}; (Array.isArray(arr)?arr:[]).forEach(c=>{ by[c.id]=c; });
+      let nd=0,nw=0,nm=0,den=0;
       for(const it of src.crypto.items){
-        const id = CG_MAP[it.t]; if(!id||!d[id]) continue;
-        const pct = (d[id].usd_24h_change ?? 0)/100;
-        num += (it.val||0)*pct; den += (it.val||0);
+        const c = by[CG_MAP[it.t]]; if(!c) continue;
+        const v=it.val||0; den+=v;
+        if(c.price_change_percentage_24h_in_currency!=null) nd+=v*(c.price_change_percentage_24h_in_currency/100);
+        if(c.price_change_percentage_7d_in_currency!=null)  nw+=v*(c.price_change_percentage_7d_in_currency/100);
+        if(c.price_change_percentage_30d_in_currency!=null) nm+=v*(c.price_change_percentage_30d_in_currency/100);
       }
-      if(den>0) out.crypto = num/den;
+      if(den>0){ out.crypto={d:nd/den, w:nw/den, m:nm/den}; }
     }
-  }catch(e){ out.errors.push("crypto24h"); }
-  // --- Stocks via Worker /yahoo (prevClose) ---
+  }catch(e){ out.errors.push("crypto"); }
+  // --- Stocks via Worker /yahoo-chart (candles 1mo) ---
   try{
     const items = (src.stocks.items||[]).filter(x=>x.cat!=="Cash");
-    let num=0, den=0;
+    let nd=0,nw=0,nm=0, dd=0,dw=0,dm=0;
     await Promise.all(items.map(async it=>{
       const sym = YF_MAP[it.t]||it.t;
       try{
-        const r = await fetch(`${CF_WORKER_URL}/yahoo?symbol=${encodeURIComponent(sym)}`,{
-          headers:{"X-Auth-Key":CF_AUTH_KEY}, signal:AbortSignal.timeout(9000)});
+        const r = await fetch(`${CF_WORKER_URL}/yahoo-chart?symbol=${encodeURIComponent(sym)}&interval=1d&range=1mo&no_logo=1`,{
+          headers:{"X-Auth-Key":CF_AUTH_KEY}, signal:AbortSignal.timeout(10000)});
         const d = await r.json();
-        const pct = (d && d.pct1d!=null) ? d.pct1d
-                  : (d && d.price && d.prevClose) ? (d.price-d.prevClose)/d.prevClose : null;
-        if(pct!=null){ num += (it.val||0)*pct; den += (it.val||0); }
+        const closes = (d.candles||[]).map(c=>c.c).filter(v=>v!=null);
+        const last = d.price || (closes.length?closes[closes.length-1]:null);
+        if(last==null||!closes.length) return;
+        const v=it.val||0;
+        const at = back => closes.length>back ? closes[closes.length-1-back] : closes[0];
+        const prev1 = d.prevClose || at(1);
+        const prev7 = at(5);   // ~1 semaine de bourse
+        const prev30= closes[0]; // début du mois glissant
+        if(prev1){ nd+=v*((last-prev1)/prev1); dd+=v; }
+        if(prev7){ nw+=v*((last-prev7)/prev7); dw+=v; }
+        if(prev30){ nm+=v*((last-prev30)/prev30); dm+=v; }
       }catch(e){}
     }));
-    if(den>0) out.stocks = num/den;
-  }catch(e){ out.errors.push("stocks24h"); }
+    out.stocks = { d: dd>0?nd/dd:null, w: dw>0?nw/dw:null, m: dm>0?nm/dm:null };
+  }catch(e){ out.errors.push("stocks"); }
   return out;
 }
 
@@ -613,7 +624,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.03";
+const APP_VERSION = "v1.04";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -3115,9 +3126,9 @@ function buildSections(L){
   const grandUSD   = cryptoUSD + indicesUSD + pickingUSD + orUSD + bankUSD;  // somme des catégories = référence unique
   const pct = v => grandUSD > 0 ? parseFloat((v / grandUSD * 100).toFixed(2)) : 0;
 
-  return [
+  const _sections_raw = [
     {
-      key:"bitcoin", n:"Bitcoin", icon:"₿", color:C.btc,
+      key:"bitcoin", n:"Crypto", icon:"₿", color:C.btc,
       totalUSD: cryptoUSD,
       totalEUR: Math.round(cryptoUSD * usdEur),
       pct: pct(cryptoUSD),
@@ -3223,6 +3234,12 @@ function buildSections(L){
       })),
     },
   ];
+  // v1.04 — tri par taille d'allocation : groupes décroissants + items décroissants
+  const _sections_sorted = _sections_raw
+    .filter(g => (g.items && g.items.length>0) || (g.totalUSD||0) !== 0)
+    .map(g => ({ ...g, items: [...(g.items||[])].sort((a,b)=>(b.valUSD||0)-(a.valUSD||0)) }))
+    .sort((a,b)=>(b.totalUSD||0)-(a.totalUSD||0));
+  return _sections_sorted;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -4533,8 +4550,8 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
           <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
         </div>
         <div style={{textAlign:"right"}}>
-          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Parts</div>
-          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(qty.toLocaleString("fr-FR"), hidden)}</div>
+          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Valeur fonds</div>
+          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
         </div>
       </div>
 
@@ -4563,15 +4580,14 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
   const _GDBS = liveGDBS || GDBS;
   const _DD   = liveDD   || DD;
 
-  // v1.03 — Perf 24h réelle (pondérée), calculée depuis les prix live
-  const [perf24h, setPerf24h] = useState({crypto:null, stocks:null, loading:true});
+  // v1.03+ — Perfs live (24h / 7j / 30j), pondérées, calculées depuis les prix live
+  const [perf24h, setPerf24h] = useState({crypto:{d:null,w:null,m:null}, stocks:{d:null,w:null,m:null}, loading:true});
   useEffect(()=>{
     let alive=true;
     setPerf24h(p=>({...p, loading:true}));
     fetchPerf24h(src).then(r=>{ if(alive) setPerf24h({crypto:r.crypto, stocks:r.stocks, loading:false}); })
-      .catch(()=>{ if(alive) setPerf24h({crypto:null, stocks:null, loading:false}); });
+      .catch(()=>{ if(alive) setPerf24h({crypto:{d:null,w:null,m:null}, stocks:{d:null,w:null,m:null}, loading:false}); });
     return ()=>{ alive=false; };
-  // recalcul quand les valeurs live changent
   }, [src.crypto?.total, src.stocks?.total]);
 
   // Prix actuels GDB.C et GDB.S
@@ -4723,8 +4739,8 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
             <div style={{fontSize:10, fontWeight:700, color:C.gray, textTransform:"uppercase",
               letterSpacing:.6, marginBottom:6, paddingLeft:2}}>Performance 24 h</div>
             <div style={{display:"flex", gap:8}}>
-              {Cell("Crypto", perf24h.crypto, C.btc)}
-              {Cell("Actions", perf24h.stocks, C.blue)}
+              {Cell("Crypto", perf24h.crypto?.d, C.btc)}
+              {Cell("Actions", perf24h.stocks?.d, C.blue)}
             </div>
           </div>
         );
@@ -4747,17 +4763,15 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
           };
           const gcAll = compoundAll(CRYPTO_MONTHLY);
           const gsAll = compoundAll(STOCKS_MONTHLY);
-          const gcM   = lastMonthPct(CRYPTO_MONTHLY);
-          const gsM   = lastMonthPct(STOCKS_MONTHLY);
-          const c1j = perf24h.loading ? null : perf24h.crypto;
-          const s1j = perf24h.loading ? null : perf24h.stocks;
+          const cP = perf24h.loading ? {} : (perf24h.crypto||{});
+          const sP = perf24h.loading ? {} : (perf24h.stocks||{});
           return (<>
         <FondCard label="CGIC — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcAll}
-          perfs={[["1J",c1j],["1S",null],["1M",gcM]]}/>
+          perfs={[["1J",cP.d??null],["1S",cP.w??null],["1M",cP.m??null]]}/>
         <FondCard label="CGIS — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gsAll}
-          perfs={[["1J",s1j],["1S",null],["1M",gsM]]}/>
+          perfs={[["1J",sP.d??null],["1S",sP.w??null],["1M",sP.m??null]]}/>
           </>);
         })()}
       </div>
@@ -7278,12 +7292,12 @@ function App(){
         {/* Centre : CREUSOT / GLOBAL INVESTMENTS + version (3 lignes) */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:15,fontWeight:900,color:C.btc,letterSpacing:1,whiteSpace:"nowrap",lineHeight:1.05}}>CREUSOT</span>
+            <span style={{fontSize:11,fontWeight:900,color:C.btc,letterSpacing:.8,whiteSpace:"nowrap",lineHeight:1.05}}>CREUSOT</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
           </div>
-          <span style={{fontSize:11,fontWeight:800,color:C.btc,letterSpacing:.6,whiteSpace:"nowrap",lineHeight:1.05}}>GLOBAL INVESTMENTS</span>
+          <span style={{fontSize:11,fontWeight:900,color:C.btc,letterSpacing:.5,whiteSpace:"nowrap",lineHeight:1.05}}>GLOBAL INVESTMENTS</span>
           <span style={{fontSize:9,fontWeight:700,color:C.btc,opacity:.8,fontFamily:"monospace",letterSpacing:.5}}>{APP_VERSION}</span>
         </div>
 
