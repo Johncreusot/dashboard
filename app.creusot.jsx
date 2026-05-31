@@ -838,7 +838,7 @@ async function save(k, v){
 /* ─── DAILY DATA from Excel Chart sheet ────────────────
    DD:        [date, wallet_crypto€, total_hors_immo€, BTC$, GDB.S$]
               col AO "TOTAL € hors immo" utilisée pour le total
-   DB:        [date, GDB&Sons, BTC, SP500, Nasdaq, ETH] base100=Jan2023
+   DB:        [date, CREUSOT GLOBAL INVESTMENTS, BTC, SP500, Nasdaq, ETH] base100=Jan2023
    GDBS:      [date, GDB.S actual$, GDB.C actual$]  daily from jan 2026
    PORT_B100: [date, portfolio_hors_immo_base100]  base=Jan2026=€313 653
 ─────────────────────────────────────────────────────── */
@@ -7073,7 +7073,7 @@ function App(){
   if(!ready)return(
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
       <div style={{fontSize:40}}>₿</div>
-      <div style={{color:C.btc,fontWeight:800,fontSize:18}}>GDB & Sons</div>
+      <div style={{color:C.btc,fontWeight:800,fontSize:18}}>CREUSOT GLOBAL INVESTMENTS</div>
       <div style={{color:C.gray,fontSize:12}}>Chargement...</div>
     </div>
   );
@@ -7083,7 +7083,7 @@ function App(){
     <div style={{fontFamily:"'-apple-system',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
       {/* Logo */}
       <div style={{fontSize:48,marginBottom:8}}>₿</div>
-      <div style={{fontSize:22,fontWeight:800,color:C.btc,marginBottom:4}}>GDB & Sons</div>
+      <div style={{fontSize:22,fontWeight:800,color:C.btc,marginBottom:4}}>CREUSOT GLOBAL INVESTMENTS</div>
       <div style={{fontSize:11,color:C.gray,marginBottom:32}}>Choisir la source de données</div>
       <div style={{position:"absolute",top:16,right:20,fontSize:10,color:C.btc,fontFamily:"monospace"}}>{APP_VERSION}</div>
 
@@ -7196,10 +7196,10 @@ function App(){
           }}>💵</button>
         </div>
 
-        {/* Centre : GDB & Sons + version */}
+        {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:17,fontWeight:900,color:C.btc,letterSpacing:.3,whiteSpace:"nowrap"}}>GDB & Sons</span>
+            <span style={{fontSize:17,fontWeight:900,color:C.btc,letterSpacing:.3,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
