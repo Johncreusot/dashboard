@@ -4730,12 +4730,36 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
         );
       })()}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+        {(()=>{
+          // v1.03 — Perfs réelles depuis les données mensuelles de l'utilisateur
+          const compoundAll = (OBJ) => {
+            let c=1, has=false;
+            Object.keys(OBJ).sort().forEach(y=>{
+              (OBJ[y].pct||[]).forEach(p=>{ if(typeof p==="number"){ c*=(1+p); has=true; } });
+            });
+            return has ? c-1 : null;
+          };
+          const lastMonthPct = (OBJ) => {
+            const ys=Object.keys(OBJ).sort(); if(!ys.length) return null;
+            const arr=OBJ[ys[ys.length-1]].pct||[];
+            for(let i=arr.length-1;i>=0;i--) if(typeof arr[i]==="number") return arr[i];
+            return null;
+          };
+          const gcAll = compoundAll(CRYPTO_MONTHLY);
+          const gsAll = compoundAll(STOCKS_MONTHLY);
+          const gcM   = lastMonthPct(CRYPTO_MONTHLY);
+          const gsM   = lastMonthPct(STOCKS_MONTHLY);
+          const c1j = perf24h.loading ? null : perf24h.crypto;
+          const s1j = perf24h.loading ? null : perf24h.stocks;
+          return (<>
         <FondCard label="CGIC — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
-          eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime}
-          perfs={[["1J",gcPerf(d1)],["1S",gcPerf(d7)],["1M",gcPerf(d30)],["YTD",gcPerf(dytd)],["ALL",gcPerfAllTime]]}/>
+          eur={eur} usdEur={src.usdEur} perfAllTime={gcAll}
+          perfs={[["1J",c1j],["1S",null],["1M",gcM]]}/>
         <FondCard label="CGIS — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
-          eur={eur} usdEur={src.usdEur} perfAllTime={gsPerfAllTime}
-          perfs={[["1J",gsPerf(d1)],["1S",gsPerf(d7)],["1M",gsPerf(d30)],["YTD",gsYTD],["1Y*",gsYTD]]}/>
+          eur={eur} usdEur={src.usdEur} perfAllTime={gsAll}
+          perfs={[["1J",s1j],["1S",null],["1M",gsM]]}/>
+          </>);
+        })()}
       </div>
 
       <SH label="Comparaison — base 100 au départ de la période" color={C.gray}/>
