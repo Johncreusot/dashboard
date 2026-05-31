@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.05";
+const APP_VERSION = "v1.06";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -4581,7 +4581,7 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
           <div style={{fontSize:14,fontWeight:800,color:pUp?C.green:C.red}}>
             {fmtP(perfCreation)}
           </div>
-          <div style={{fontSize:9,color:C.gray,letterSpacing:.3}}>depuis création</div>
+          <div style={{fontSize:9,color:C.gray,letterSpacing:.3}}>sur investi</div>
         </div>
       </div>
 
@@ -4782,13 +4782,16 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
             for(let i=arr.length-1;i>=0;i--) if(typeof arr[i]==="number") return arr[i];
             return null;
           };
-          const gcAll = compoundAll(CRYPTO_MONTHLY);
-          const gsAll = compoundAll(STOCKS_MONTHLY);
-          const cP = perf24h.loading ? {} : (perf24h.crypto||{});
-          const sP = perf24h.loading ? {} : (perf24h.stocks||{});
           // PNL latent en USD (somme des items)
           const gcPnl = (src.crypto.items||[]).reduce((s,x)=>s+(x.pnl||0),0);
           const gsPnl = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pnl||0),0);
+          // % "depuis création" = PNL / investi (cohérent avec le PNL affiché)
+          const gcInv = (src.crypto.items||[]).reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
+          const gsInv = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
+          const gcAll = gcInv>0 ? gcPnl/gcInv : null;
+          const gsAll = gsInv>0 ? gsPnl/gsInv : null;
+          const cP = perf24h.loading ? {} : (perf24h.crypto||{});
+          const sP = perf24h.loading ? {} : (perf24h.stocks||{});
           return (<>
         <FondCard label="CGIC — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcAll} pnl={gcPnl}
@@ -4820,19 +4823,27 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
         const up = vals[vals.length-1]>=vals[0];
         const col = up?C.green:C.red;
         const cur = eur?"€":"$";
-        const last=vals[vals.length-1], first=vals[0];
-        const totPerf=(last-first)/first;
+        // Valeur totale = identique à HOME (somme buildSections, live, cash inclus)
+        const _secs = buildSections(src);
+        const homeUSD = _secs.reduce((s,sec)=>s+(sec.totalUSD||0),0);
+        const homeVal = eur ? Math.round(homeUSD*usdEurNow) : Math.round(homeUSD);
+        // Performance = P&L total latent / investi total (cohérent avec les cartes)
+        const investedUSD = (src.crypto.items||[]).reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0)
+          + (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
+        const pnlUSD = (src.crypto.items||[]).reduce((s,x)=>s+(x.pnl||0),0)
+          + (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pnl||0),0);
+        const totPerf = investedUSD>0 ? pnlUSD/investedUSD : null;
         const ticks=[0, Math.floor(pts.length/3), Math.floor(2*pts.length/3), pts.length-1].filter((v,i,a)=>a.indexOf(v)===i);
         return (
           <div style={crd()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
               <div>
                 <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>Valeur totale</div>
-                <div style={{fontSize:20,fontWeight:900,color:C.text}}>{cur}{fmtK(last)}</div>
+                <div style={{fontSize:20,fontWeight:900,color:C.text}}>{cur}{fmtK(homeVal)}</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>Depuis {pts[0].lbl}</div>
-                <div style={{fontSize:15,fontWeight:800,color:totPerf>=0?C.green:C.red}}>{fmtP(totPerf)}</div>
+                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>P&L latent</div>
+                <div style={{fontSize:15,fontWeight:800,color:totPerf!=null&&totPerf>=0?C.green:C.red}}>{totPerf!=null?fmtP(totPerf):"—"}</div>
               </div>
             </div>
             <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
