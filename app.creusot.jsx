@@ -149,7 +149,7 @@ const GDB_HIST=[
 
 const GDBS_2026 = [{"d": "Mai-31", "s": 100.0614, "sp": 100, "nq": 100}];
 
-const CURRENT = {"date": "2026-05-31", "totalUSD": 142170, "totalEUR": 130796, "usdEur": 0.92, "eurUsd": 1.086957, "btcPrice": 43588.99, "gdbC": 99.9847, "gdbS": 100.0614, "crypto": {"date": "2026-05-31", "total": 104784, "items": [{"t": "BTC", "qty": 2.14325481, "pa": 43588.99, "live": 43588.99, "val": 93422, "pnl": 0, "pct": 0}, {"t": "ETH", "qty": 5.5, "pa": 2065.81, "live": 2065.81, "val": 11362, "pnl": 0, "pct": 0}]}, "stocks": {"date": "2026-05-31", "total": 28694, "items": [{"t": "NVDA", "cat": "Picking", "qty": 12.0, "pa": 179.92, "live": 179.92, "val": 2159, "pnl": 0, "pct": 0}, {"t": "IWDA", "cat": "Indices", "qty": 20.0, "pa": 133.0571, "live": 133.0571, "val": 2661, "pnl": 0, "pct": 0}, {"t": "APH", "cat": "Picking", "qty": 26.0, "pa": 131.41, "live": 131.41, "val": 3417, "pnl": 0, "pct": 0}, {"t": "ANET", "cat": "Picking", "qty": 20.0, "pa": 146.25, "live": 146.25, "val": 2925, "pnl": 0, "pct": 0}, {"t": "AXON", "cat": "Picking", "qty": 12.5, "pa": 386.94, "live": 386.94, "val": 4837, "pnl": 0, "pct": 0}, {"t": "PLTR", "cat": "Picking", "qty": 50.0, "pa": 136.3, "live": 136.3, "val": 6815, "pnl": 0, "pct": 0}, {"t": "USD", "cat": "Cash", "qty": 5880, "pa": 1.0, "live": 1.0, "val": 5880, "pnl": 0, "pct": 0}, {"t": "KUCOIN", "cat": "Cash", "qty": 0, "pa": 1.0, "live": 1.0, "val": 0, "pnl": 0, "pct": 0}]}, "bank": {"date": "2026-05-31", "totalEUR": 7997, "breakdown": {"LCL": 7159, "BCI": 838, "DeBlock": 0}}, "portfolio": {"date": "2026-05-31", "items": [{"t": "BTC", "qty": 2.14325481, "pa": 43588.99, "live": 43588.99, "val": 93422, "pnl": 0, "pct": 0, "cat": "Crypto", "valEUR": 85948}, {"t": "ETH", "qty": 5.5, "pa": 2065.81, "live": 2065.81, "val": 11362, "pnl": 0, "pct": 0, "cat": "Crypto", "valEUR": 10453}, {"t": "NVDA", "cat": "Picking", "qty": 12.0, "pa": 179.92, "live": 179.92, "val": 2159, "pnl": 0, "pct": 0, "valEUR": 1986}, {"t": "IWDA", "cat": "Indices", "qty": 20.0, "pa": 133.0571, "live": 133.0571, "val": 2661, "pnl": 0, "pct": 0, "valEUR": 2448}, {"t": "APH", "cat": "Picking", "qty": 26.0, "pa": 131.41, "live": 131.41, "val": 3417, "pnl": 0, "pct": 0, "valEUR": 3144}, {"t": "ANET", "cat": "Picking", "qty": 20.0, "pa": 146.25, "live": 146.25, "val": 2925, "pnl": 0, "pct": 0, "valEUR": 2691}, {"t": "AXON", "cat": "Picking", "qty": 12.5, "pa": 386.94, "live": 386.94, "val": 4837, "pnl": 0, "pct": 0, "valEUR": 4450}, {"t": "PLTR", "cat": "Picking", "qty": 50.0, "pa": 136.3, "live": 136.3, "val": 6815, "pnl": 0, "pct": 0, "valEUR": 6270}, {"t": "LCL", "cat": "Cash Matelas", "qty": 7159, "pa": 1.0, "live": 1.086957, "val": 7782, "pnl": 0, "pct": 0.0, "valEUR": 7159}, {"t": "BCI", "cat": "Cash Matelas", "qty": 838, "pa": 1.0, "live": 1.086957, "val": 911, "pnl": 0, "pct": 0.0, "valEUR": 838}, {"t": "DeBlock", "cat": "Cash Matelas", "qty": 0, "pa": 1.0, "live": 1.086957, "val": 0, "pnl": 0, "pct": 0.0, "valEUR": 0}, {"t": "USD", "cat": "Cash Dip", "qty": 5880, "pa": 1.0, "live": 1.0, "val": 5880, "pnl": 0, "pct": 0, "valEUR": 5410}, {"t": "KUCOIN", "cat": "Cash Dip", "qty": 0, "pa": 1.0, "live": 1.0, "val": 0, "pnl": 0, "pct": 0, "valEUR": 0}]}, "alloc": [{"n": "Crypto", "pct": 73.7, "tgt": 74, "c": "#F7931A"}, {"n": "Picking", "pct": 14.2, "tgt": 14, "c": "#7B68EE"}, {"n": "Cash Matelas", "pct": 6.1, "tgt": 6, "c": "#6B7280"}, {"n": "Cash Dip", "pct": 4.1, "tgt": 4, "c": "#22C55E"}, {"n": "Indices", "pct": 1.9, "tgt": 2, "c": "#4A90D9"}]};
+const CURRENT = {"date": "2026-05-31", "totalUSD": 142170, "totalEUR": 130796, "usdEur": 0.92, "eurUsd": 1.086957, "btcPrice": 43588.99, "gdbC": 99.9847, "gdbS": 100.0614, "crypto": {"date": "2026-05-31", "total": 104784, "items": [{"t": "BTC", "qty": 2.14325481, "pa": 43588.99, "live": 43588.99, "val": 93422, "pnl": 0, "pct": 0}, {"t": "ETH", "qty": 5.5, "pa": 2065.81, "live": 2065.81, "val": 11362, "pnl": 0, "pct": 0}]}, "stocks": {"date": "2026-05-31", "total": 28694, "items": [{"t": "NVDA", "cat": "Picking", "qty": 12.0, "pa": 179.92, "live": 179.92, "val": 2159, "pnl": 0, "pct": 0}, {"t": "IWDA", "cat": "Indices", "qty": 20.0, "pa": 133.0571, "live": 133.0571, "val": 2661, "pnl": 0, "pct": 0}, {"t": "APH", "cat": "Picking", "qty": 26.0, "pa": 131.41, "live": 131.41, "val": 3417, "pnl": 0, "pct": 0}, {"t": "ANET", "cat": "Picking", "qty": 20.0, "pa": 146.25, "live": 146.25, "val": 2925, "pnl": 0, "pct": 0}, {"t": "AXON", "cat": "Picking", "qty": 12.5, "pa": 386.94, "live": 386.94, "val": 4837, "pnl": 0, "pct": 0}, {"t": "PLTR", "cat": "Picking", "qty": 50.0, "pa": 136.3, "live": 136.3, "val": 6815, "pnl": 0, "pct": 0}, {"t": "USD", "cat": "Cash", "qty": 5880, "pa": 1.0, "live": 1.0, "val": 5880, "pnl": 0, "pct": 0}, {"t": "KUCOIN", "cat": "Cash", "qty": 0, "pa": 1.0, "live": 1.0, "val": 0, "pnl": 0, "pct": 0}]}, "bank": {"date": "2026-05-31", "totalEUR": 7997, "breakdown": {"LCL": 7159, "BCI": 838, "DeBlock": 0}}, "portfolio": {"date": "2026-05-31", "items": [{"t": "BTC", "qty": 2.14325481, "pa": 43588.99, "live": 43588.99, "val": 93422, "pnl": 0, "pct": 0, "cat": "Crypto", "valEUR": 85948}, {"t": "ETH", "qty": 5.5, "pa": 2065.81, "live": 2065.81, "val": 11362, "pnl": 0, "pct": 0, "cat": "Crypto", "valEUR": 10453}, {"t": "NVDA", "cat": "Picking", "qty": 12.0, "pa": 179.92, "live": 179.92, "val": 2159, "pnl": 0, "pct": 0, "valEUR": 1986}, {"t": "IWDA", "cat": "Indices", "qty": 20.0, "pa": 133.0571, "live": 133.0571, "val": 2661, "pnl": 0, "pct": 0, "valEUR": 2448}, {"t": "APH", "cat": "Picking", "qty": 26.0, "pa": 131.41, "live": 131.41, "val": 3417, "pnl": 0, "pct": 0, "valEUR": 3144}, {"t": "ANET", "cat": "Picking", "qty": 20.0, "pa": 146.25, "live": 146.25, "val": 2925, "pnl": 0, "pct": 0, "valEUR": 2691}, {"t": "AXON", "cat": "Picking", "qty": 12.5, "pa": 386.94, "live": 386.94, "val": 4837, "pnl": 0, "pct": 0, "valEUR": 4450}, {"t": "PLTR", "cat": "Picking", "qty": 50.0, "pa": 136.3, "live": 136.3, "val": 6815, "pnl": 0, "pct": 0, "valEUR": 6270}, {"t": "LCL", "cat": "Cash Matelas", "qty": 7159, "pa": 1.0, "live": 1.086957, "val": 7782, "pnl": 0, "pct": 0.0, "valEUR": 7159}, {"t": "BCI", "cat": "Cash Matelas", "qty": 838, "pa": 1.0, "live": 1.086957, "val": 911, "pnl": 0, "pct": 0.0, "valEUR": 838}, {"t": "DeBlock", "cat": "Cash Matelas", "qty": 0, "pa": 1.0, "live": 1.086957, "val": 0, "pnl": 0, "pct": 0.0, "valEUR": 0}, {"t": "USD", "cat": "Cash", "qty": 5880, "pa": 1.0, "live": 1.0, "val": 5880, "pnl": 0, "pct": 0, "valEUR": 5410}, {"t": "KUCOIN", "cat": "Cash", "qty": 0, "pa": 1.0, "live": 1.0, "val": 0, "pnl": 0, "pct": 0, "valEUR": 0}]}, "alloc": [{"n": "Crypto", "pct": 73.7, "tgt": 74, "c": "#F7931A"}, {"n": "Picking", "pct": 14.2, "tgt": 14, "c": "#7B68EE"}, {"n": "Cash Matelas", "pct": 6.1, "tgt": 6, "c": "#6B7280"}, {"n": "Cash Dip", "pct": 4.1, "tgt": 4, "c": "#22C55E"}, {"n": "Indices", "pct": 1.9, "tgt": 2, "c": "#4A90D9"}]};
 
 const MONTHS = {"2022": {"m": ["JAN", "FEV", "MAR", "AVR", "MAI", "JUI", "JUL", "AOU", "SEP", "OCT", "NOV", "DEC"], "pct": [-0.0376, -0.004, 0.062, -0.0021, -0.0117, -0.0725, 0.0762, 0.028, -0.0685, 0.0512, -0.0927, 0.0121], "pnl": [-2800, -288, 4425, -156, -883, -5418, 5282, 2090, -5254, 3660, -6962, 824], "ttl": -5480}, "2023": {"m": ["JAN", "FEV", "MAR", "AVR", "MAI", "JUI", "JUL", "AOU", "SEP", "OCT", "NOV", "DEC"], "pct": [0.1693, -0.0487, 0.1241, 0.0551, -0.061, 0.0341, -0.0403, 0.0272, -0.0285, 0.1389, 0.0363, 0.0878], "pnl": [11678, -3926, 9525, 4749, -5549, 2913, -3559, 2307, -2485, 11759, 3495, 8772], "ttl": 39679}, "2024": {"m": ["JAN", "FEV", "MAR", "AVR", "MAI", "JUI", "JUL", "AOU", "SEP", "OCT", "NOV", "DEC"], "pct": [0.025, 0.2988, 0.0739, -0.0823, 0.1802, -0.0817, 0.0867, -0.145, 0.103, 0.1005, 0.3449, -0.0565], "pnl": [2721, 33283, 10691, -12781, 25686, -13752, 13392, -24354, 14787, 15907, 60088, -13247], "ttl": 112421}, "2025": {"m": ["JAN", "FEV", "MAR", "AVR", "MAI", "JUI", "JUL", "AOU", "SEP", "OCT", "NOV", "DEC"], "pct": [0.0856, -0.2298, -0.0387, 0.0835, 0.164, -0.0763, 0.163, -0.0471, 0.0186, 0.0355, -0.1699, -0.0477], "pnl": [18936, -55156, -7153, 14838, 31576, -17094, 33739, -11350, 4271, 8293, -41109, -9584], "ttl": -29793}, "2026": {"m": ["JAN", "FEV", "MAR"], "pct": [0.0668, -0.2257, 0.1327], "pnl": [12783, -46050, 20962], "ttl": -12305}};
 const SEAS = {"m": ["JAN", "FEV", "MAR", "AVR", "MAI", "JUI", "JUL", "AOU", "SEP", "OCT", "NOV", "DEC"], "pct": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]};
@@ -3136,73 +3136,32 @@ function buildSections(L){
       totalEUR: Math.round(cashDipUSD*usdEur),
       pct: pct(cashDipUSD),
       items: (()=>{
-        // Chercher dans portfolio.items ET stocks.items (selon ce qui est disponible)
         const allItems = src.portfolio?.items?.length>0 ? src.portfolio.items : src.stocks.items;
         const findItem = t => allItems.find(x=>x.t===t) || src.stocks.items?.find(x=>x.t===t);
         const usdItem  = findItem("USD");
-        const euroItem = findItem("EURO");
-        const strcItem = findItem("STRC");
         const out = [];
-        // IBKR Dollar
-        if(usdItem){
-          const qty = usdItem.qty||0;
-          const val = usdItem.val!=null ? usdItem.val : qty;
+        // IBKR Dollar (cash USD chez IBKR)
+        {
+          const qty = usdItem?.qty ?? 0;
+          const val = usdItem?.val != null ? usdItem.val : qty;
           out.push({
             ticker:"USD", icon:"💵", label:"IBKR Dollar",
             detail:`${qty<0?"-":""}$${Math.abs(qty).toLocaleString("fr-FR")} cash USD IBKR`,
             valUSD: val, valEUR: Math.round(val*usdEur),
             pnl:0, pct:0, pa:"1.0000", live:"1.0000", qty, investi:qty,
           });
-        } else {
-          // Valeur fixe si non trouvée
-          out.push({ticker:"USD",icon:"💵",label:"IBKR Dollar",detail:"$-5 430 cash USD IBKR",valUSD:-5430,valEUR:Math.round(-5430*usdEur),pnl:0,pct:0,pa:"1.0000",live:"1.0000",qty:-5430,investi:-5430});
         }
-        // IBKR Euro
-        if(euroItem){
-          const qty = euroItem.qty||0;
-          const val = euroItem.val!=null ? euroItem.val : Math.round(qty*eurUsd);
-          out.push({
-            ticker:"EURO", icon:"💶", label:"IBKR Euro",
-            detail:`€${qty.toLocaleString("fr-FR")} en cash IBKR`,
-            valUSD: val, valEUR: qty,
-            pnl:0, pct:0,
-            pa:(euroItem.pa||1.17).toFixed(4),
-            live:(euroItem.live||eurUsd).toFixed(4),
-            qty, investi:(euroItem.pa||1.17)*qty,
-          });
-        } else {
-          out.push({ticker:"EURO",icon:"💶",label:"IBKR Euro",detail:"€2 240 en cash IBKR",valUSD:2603,valEUR:2240,pnl:0,pct:0,pa:"1.1700",live:eurUsd.toFixed(4),qty:2240,investi:2621});
-        }
-        // STRC
-        if(strcItem){
-          out.push({
-            ticker:"STRC", icon:TICKER_ICONS["STRC"]||"₿", label:"Strike (STRC)",
-            detail:`${strcItem.qty} actions × $${(strcItem.live||0).toFixed(2)}`,
-            valUSD:strcItem.val, valEUR:Math.round((strcItem.val||0)*usdEur),
-            pnl:strcItem.pnl||0, pct:strcItem.pct||0,
-            pa:(strcItem.pa||0).toFixed(2), live:(strcItem.live||0).toFixed(2),
-            qty:strcItem.qty, investi:(strcItem.pa||0)*strcItem.qty,
-          });
-        }
-        // KuCoin
-        // KuCoin — wallet crypto, peut être à 0 ou négatif
-        const kucoinItem = allItems.find(x=>x.t==="KUCOIN") || src.stocks.items?.find(x=>x.t==="KUCOIN");
+        // KuCoin (cash USD chez KuCoin)
+        const kucoinItem = findItem("KUCOIN");
         const kQty  = kucoinItem?.qty  ?? 0;
         const kVal  = kucoinItem?.val  ?? 0;
-        const kLive = kucoinItem?.live ?? 0;
-        const kPA   = kucoinItem?.pa   ?? 0;
         out.push({
-          ticker:"KUCOIN", icon:null, iconComponent:"KUCOIN", label:"KuCoin",
-          detail: kQty === 0 ? "Compte vide — rattaché GDB.C"
-                : kQty > 0  ? `${kQty} USDT · live $${kLive}`
-                :              `${kQty} USDT (découvert)`,
+          ticker:"KUCOIN", icon:"💵", iconComponent:"KUCOIN", label:"KuCoin",
+          detail: kQty === 0 ? "Compte vide"
+                : kQty > 0  ? `$${kQty.toLocaleString("fr-FR")} cash USD KuCoin`
+                :              `$${kQty.toLocaleString("fr-FR")} (découvert)`,
           valUSD: kVal, valEUR: Math.round(kVal*usdEur),
-          pnl: kucoinItem?.pnl ?? 0,
-          pct: kucoinItem?.pct ?? 0,
-          pa:   String(kPA),
-          live: String(kLive),
-          qty:  kQty,
-          investi: kPA * kQty,
+          pnl:0, pct:0, pa:"1.0000", live:"1.0000", qty:kQty, investi:kQty,
         });
         return out;
       })(),
