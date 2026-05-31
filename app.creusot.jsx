@@ -302,6 +302,43 @@ async function fetchPerf24h(src){
   return out;
 }
 
+/* v1.05 — Benchmarks marché en live (BTC, ETH, S&P 500, Nasdaq, MSCI World)
+   Renvoie la perf sur une fenêtre donnée. Indices via Worker /yahoo-chart, crypto via CoinGecko. */
+async function fetchBenchmarks(){
+  const out = { BTC:null, ETH:null, SP500:null, NASDAQ:null, MSCI:null };
+  // Crypto (CoinGecko markets : 24h/7d/30d/1y)
+  try{
+    const u = "https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum&price_change_percentage=24h,7d,30d,1y";
+    const r = await fetch(u,{signal:AbortSignal.timeout(9000)});
+    const arr = await r.json();
+    const by={}; (Array.isArray(arr)?arr:[]).forEach(c=>by[c.id]=c);
+    const pack = c => c ? {
+      d:(c.price_change_percentage_24h_in_currency??null), w:(c.price_change_percentage_7d_in_currency??null),
+      m:(c.price_change_percentage_30d_in_currency??null), y:(c.price_change_percentage_1y_in_currency??null),
+    } : null;
+    out.BTC = pack(by.bitcoin); out.ETH = pack(by.ethereum);
+  }catch(e){}
+  // Indices via Worker (range 1y pour couvrir d/w/m/ytd)
+  const idx = { SP500:"^GSPC", NASDAQ:"^IXIC", MSCI:"URTH" };
+  await Promise.all(Object.entries(idx).map(async([k,sym])=>{
+    try{
+      const r = await fetch(`${CF_WORKER_URL}/yahoo-chart?symbol=${encodeURIComponent(sym)}&interval=1d&range=1y&no_logo=1`,{
+        headers:{"X-Auth-Key":CF_AUTH_KEY}, signal:AbortSignal.timeout(11000)});
+      const d = await r.json();
+      const rows = (d.candles||[]).filter(c=>c.c!=null);
+      const closes = rows.map(c=>c.c);
+      const last = d.price || (closes.length?closes[closes.length-1]:null);
+      if(last==null||!closes.length) return;
+      const at = back => closes.length>back ? closes[closes.length-1-back] : closes[0];
+      const yearStart = (()=>{ const yr=new Date().getUTCFullYear();
+        const row = rows.find(c=> (c.t? new Date(c.t).getUTCFullYear():0) >= yr ); return row?row.c:closes[0]; })();
+      const pc = p => p ? (last-p)/p*100 : null;
+      out[k] = { d: pc(d.prevClose||at(1)), w: pc(at(5)), m: pc(at(21)), y: pc(yearStart) };
+    }catch(e){}
+  }));
+  return out;
+}
+
 /* Fetch all prices and return a prices object */
 /* ═══════════════════════════════════════════════════════════
    APPLY TRADE  v9
@@ -624,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.04";
+const APP_VERSION = "v1.05";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -4492,13 +4529,17 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
    4. Graphique GDB.C cours + Graphique GDB.S cours
 ═══════════════════════════════════════════════════════════ */
 /* ── FondCard: récapitulatif d'un fonds ── */
-function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, perfAllTime}){
+function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, perfAllTime, pnl}){
   // label format: "GDB.C — CRYPTO" or "GDB.S — ACTIONS"
   const [titre, sousTitre] = label.split(" — ");
   // perfAllTime passé depuis PageGDB (corrigé €/$), fallback sur calcul local en €
   const perfCreation = perfAllTime != null ? perfAllTime : (eur ? (cours*(usdEur||0.852))/10-1 : cours/10-1);
   const pUp = perfCreation >= 0;
-  const affCours = eur ? "€"+(cours*(usdEur||0.852)).toFixed(2) : "$"+cours.toFixed(2);
+  // v1.05 — grand chiffre = PNL en devise (vert/rouge selon signe)
+  const pnlVal = (typeof pnl === "number") ? (eur ? pnl*(usdEur||0.852) : pnl) : null;
+  const pnlUp = (pnlVal||0) >= 0;
+  const affPnl = pnlVal==null ? "—"
+    : (pnlVal>=0?"+":"-") + (eur?"€":"$") + fmtK(Math.abs(Math.round(pnlVal)));
   const affFonds = eur ? "€"+fmtK(Math.round(fonds*(usdEur||0.852))) : "$"+fmtK(fonds);
 
   // Perfs 1J, 1S, 1M seulement (3 premières)
@@ -4528,11 +4569,15 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
         {sousTitre&&<span style={{color:C.gray}}>{" — "}{sousTitre}</span>}
       </div>
 
-      {/* Cours + perf création */}
+      {/* PNL + perf création */}
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:16}}>
-        <div style={{fontSize:26,fontWeight:900,color,letterSpacing:-1,lineHeight:1}}>
-          {msk(affCours, hidden)}
-        </div>        <div style={{textAlign:"right"}}>
+        <div>
+          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:2}}>P&L latent</div>
+          <div style={{fontSize:24,fontWeight:900,color:pnlUp?C.green:C.red,letterSpacing:-1,lineHeight:1}}>
+            {msk(affPnl, hidden)}
+          </div>
+        </div>
+        <div style={{textAlign:"right"}}>
           <div style={{fontSize:14,fontWeight:800,color:pUp?C.green:C.red}}>
             {fmtP(perfCreation)}
           </div>
@@ -4543,16 +4588,10 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
       {/* Séparateur */}
       <div style={{height:1,background:C.border,marginBottom:12}}/>
 
-      {/* Fonds + Parts */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,marginBottom:14}}>
-        <div>
-          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Fonds</div>
-          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
-        </div>
-        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Valeur fonds</div>
-          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
-        </div>
+      {/* Valeur du fonds (une seule fois) */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Valeur du fonds</div>
+        <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
       </div>
 
       {/* Perfs 1J / 1S / 1M */}
@@ -4589,6 +4628,14 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
       .catch(()=>{ if(alive) setPerf24h({crypto:{d:null,w:null,m:null}, stocks:{d:null,w:null,m:null}, loading:false}); });
     return ()=>{ alive=false; };
   }, [src.crypto?.total, src.stocks?.total]);
+
+  // v1.05 — Benchmarks marché en live
+  const [benchLive, setBenchLive] = useState(null);
+  useEffect(()=>{
+    let alive=true;
+    fetchBenchmarks().then(b=>{ if(alive) setBenchLive(b); }).catch(()=>{});
+    return ()=>{ alive=false; };
+  }, []);
 
   // Prix actuels GDB.C et GDB.S
   const {gdbC: gcToday, gdbS: gsToday_calc} = calcGdbPrices(src);
@@ -4655,61 +4702,35 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
 
 
   const bench = (()=>{
-    const TF_CUTS = makeTFCuts();
-    const cut = TF_CUTS[benchTF]||"2023-01-01";
-    const GS_BASE = 11.7681;
-    const _gcData = liveGC || GC_FULL;
-    const _gsbData = liveGSB || GS_B100_EXT;
-    const _benchData = liveBench || BENCH_IDX;
-
-    // Maps — valeurs null exclues
-    const gcMap2 = {}; _gcData.forEach(r=>{ if(r[1]!=null) gcMap2[r[0]]=r[1]; });
-    const gsMap3 = {}; _gsbData.forEach(r=>{ if(r[1]!=null) gsMap3[r[0]]=r[1]/100*GS_BASE; });
-    const dbMap3 = {}; _benchData.forEach(r=>{ if(r[1]!=null) dbMap3[r[0]]=r; });
-
-    // Derniers points non-null
-    const gcLast = _gcData.length>0 ? _gcData[_gcData.length-1][1] : calcGdbPrices(CURRENT).gdbC;
-    const gsLast = _gsbData.reduceRight((a,r)=>a!=null?a:(r[1]!=null?r[1]/100*GS_BASE:null),null);
-    const dbLast = _benchData.reduceRight((a,r)=>a!=null?a:(r[1]!=null?r:null),null);
-
-    // Premier point non-null à partir de cut
-    const fwd = (m, c) => {
-      const keys = Object.keys(m).filter(d=>d>=c).sort();
-      return keys.length ? m[keys[0]] : null;
+    // v1.05 — Benchmark live. Période pilotée par benchTF (1J/1S/1M/YTD…).
+    // Mes perfs (CGIC/CGIS) : 24h/7j/30j via perf24h ; YTD via données mensuelles 2026.
+    // Marchés (BTC/ETH/S&P/Nasdaq/MSCI) : via fetchBenchmarks (live).
+    const tf = benchTF;
+    const ytdOf = (OBJ) => {
+      const y=OBJ["2026"]; if(!y) return null;
+      let c=1, has=false; (y.pct||[]).forEach(p=>{ if(typeof p==="number"){c*=(1+p);has=true;} });
+      return has ? c-1 : null;
     };
-
-    // Taux de change au cut (premier point DD >= cut)
-    const usdEurCut = (()=>{
-      const row = _DD.reduceRight((a,r)=>a!=null?a:(r[0]<=cut&&r[5]?r:null),null);
-      return row ? row[5] : usdEurNow;
-    })();
-
-    const fxPerf = (now, start) => {
-      if(!start || !now) return null;
-      if(eur) return (now*usdEurNow)/(start*usdEurCut)-1;
-      return now/start-1;
+    // mappe une période → clé dans perf24h/benchLive
+    const key = tf==="1W" ? "w" : tf==="1M" ? "m" : tf==="MTD" ? "m" : "d";
+    const cp = perf24h.crypto||{}, sp = perf24h.stocks||{};
+    const myC = tf==="YTD"||tf==="1Y"||tf==="2Y"||tf==="ALL" ? ytdOf(CRYPTO_MONTHLY) : (cp[key]??null);
+    const myS = tf==="YTD"||tf==="1Y"||tf==="2Y"||tf==="ALL" ? ytdOf(STOCKS_MONTHLY) : (sp[key]??null);
+    // marchés : benchLive renvoie en % (d/w/m/y) → ramener en fraction
+    const bl = benchLive||{};
+    const mk = (o) => {
+      if(!o) return null;
+      const k = (tf==="1W")?"w":(tf==="1M"||tf==="MTD")?"m":(tf==="YTD"||tf==="1Y"||tf==="2Y"||tf==="ALL")?"y":"d";
+      return o[k]!=null ? o[k]/100 : null;
     };
-
-    const pGC = ()=>{ const s=fwd(gcMap2,cut); return fxPerf(gcLast,s); };
-    const pGS = ()=>{
-      const ytdStart = gsMap3['2026-01-01']||GS_BASE;
-      const s = cut<'2026-01-01' ? ytdStart : fwd(gsMap3,cut);
-      return fxPerf(gsLast,s);
-    };
-    const pDB = col=>{
-      const colMap = {}; _benchData.forEach(r=>{ if(r[col]!=null) colMap[r[0]]=r[col]; });
-      const s=fwd(colMap,cut), e=colMap[Object.keys(colMap).filter(d=>d<=(_benchData[_benchData.length-1]?.[0]||'9')).sort().at(-1)];
-      return fxPerf(e,s);
-    };
-
     return [
-      {n:"CGIC",  v:pGC(),  ic:"₿",  color:C.btc},
-      {n:"CGIS",  v:pGS(),  ic:"📈", color:C.red},
-      {n:"Bitcoin",v:pDB(2), ic:"🟠", color:"#F7931A"},
-      {n:"S&P 500",v:pDB(3), ic:"🇺🇸",color:"#6B7280"},
-      {n:"Nasdaq", v:pDB(4), ic:"🖥",  color:"#10B981"},
-      {n:"ETH",    v:pDB(5), ic:"🔵", color:"#1E40AF"},
-      {n:"MSCI",   v:pDB(5), ic:"🌍", color:"#EC4899"},
+      {n:"CGIC (Crypto)", v:myC, ic:"₿",  color:C.btc},
+      {n:"CGIS (Actions)",v:myS, ic:"📈", color:C.blue},
+      {n:"Bitcoin",       v:mk(bl.BTC),   ic:"🟠", color:"#F7931A"},
+      {n:"Ethereum",      v:mk(bl.ETH),   ic:"🔵", color:"#1E40AF"},
+      {n:"S&P 500",       v:mk(bl.SP500), ic:"🇺🇸", color:"#6B7280"},
+      {n:"Nasdaq",        v:mk(bl.NASDAQ),ic:"🖥",  color:"#10B981"},
+      {n:"MSCI World",    v:mk(bl.MSCI),  ic:"🌍", color:"#EC4899"},
     ];
   })();
 
@@ -4765,21 +4786,77 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
           const gsAll = compoundAll(STOCKS_MONTHLY);
           const cP = perf24h.loading ? {} : (perf24h.crypto||{});
           const sP = perf24h.loading ? {} : (perf24h.stocks||{});
+          // PNL latent en USD (somme des items)
+          const gcPnl = (src.crypto.items||[]).reduce((s,x)=>s+(x.pnl||0),0);
+          const gsPnl = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pnl||0),0);
           return (<>
         <FondCard label="CGIC — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
-          eur={eur} usdEur={src.usdEur} perfAllTime={gcAll}
+          eur={eur} usdEur={src.usdEur} perfAllTime={gcAll} pnl={gcPnl}
           perfs={[["1J",cP.d??null],["1S",cP.w??null],["1M",cP.m??null]]}/>
         <FondCard label="CGIS — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
-          eur={eur} usdEur={src.usdEur} perfAllTime={gsAll}
+          eur={eur} usdEur={src.usdEur} perfAllTime={gsAll} pnl={gsPnl}
           perfs={[["1J",sP.d??null],["1S",sP.w??null],["1M",sP.m??null]]}/>
           </>);
         })()}
       </div>
 
-      <SH label="Comparaison — base 100 au départ de la période" color={C.gray}/>
-      <GdbCompareChartGDB onTFChange={setBenchTF} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={liveGC}/>
+      <SH label="Performance totale — Crypto + Actions" color={C.gray}/>
+      {(()=>{
+        // v1.05 — courbe de valeur totale mensuelle (TOTAL_MONTHLY), crypto+stocks
+        const TM = TOTAL_MONTHLY;
+        const MM=['JAN','FEV','MAR','AVR','MAI','JUI','JUL','AOU','SEP','OCT','NOV','DEC'];
+        const pts=[];
+        Object.keys(TM).sort().forEach(y=>{
+          (TM[y].eom||[]).forEach((v,i)=>{ if(typeof v==="number") pts.push({lbl:MM[i]+" "+y.slice(2), v, y, i}); });
+        });
+        if(pts.length<2) return <div style={{...crd(), color:C.gray, fontSize:12, textAlign:"center", padding:"24px"}}>Données insuffisantes</div>;
+        const conv = v => eur ? v : Math.round(v / usdEurNow); // données stockées en €
+        const vals = pts.map(p=>conv(p.v));
+        const W=340,H=150,PL=8,PR=8,PT=10,PB=22;
+        const min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
+        const X=i=>PL+(i/(vals.length-1))*(W-PL-PR);
+        const Y=v=>PT+(1-(v-min)/rng)*(H-PT-PB);
+        const line=vals.map((v,i)=>`${X(i)},${Y(v)}`).join(" ");
+        const up = vals[vals.length-1]>=vals[0];
+        const col = up?C.green:C.red;
+        const cur = eur?"€":"$";
+        const last=vals[vals.length-1], first=vals[0];
+        const totPerf=(last-first)/first;
+        const ticks=[0, Math.floor(pts.length/3), Math.floor(2*pts.length/3), pts.length-1].filter((v,i,a)=>a.indexOf(v)===i);
+        return (
+          <div style={crd()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
+              <div>
+                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>Valeur totale</div>
+                <div style={{fontSize:20,fontWeight:900,color:C.text}}>{cur}{fmtK(last)}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>Depuis {pts[0].lbl}</div>
+                <div style={{fontSize:15,fontWeight:800,color:totPerf>=0?C.green:C.red}}>{fmtP(totPerf)}</div>
+              </div>
+            </div>
+            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
+              <defs><linearGradient id="totg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={col} stopOpacity="0.28"/>
+                <stop offset="100%" stopColor={col} stopOpacity="0"/>
+              </linearGradient></defs>
+              <polygon points={`${PL},${H-PB} ${line} ${X(vals.length-1)},${H-PB}`} fill="url(#totg)"/>
+              <polyline points={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+              <circle cx={X(vals.length-1)} cy={Y(vals[vals.length-1])} r="3.5" fill={col}/>
+              {ticks.map((ti,i)=>(<text key={i} x={X(ti)} y={H-6} textAnchor="middle" fill={C.text3} fontSize="8">{pts[ti].lbl}</text>))}
+            </svg>
+          </div>
+        );
+      })()}
 
-      <SH label={`Benchmark — ${benchTF}`} color={C.gray}/>
+      <SH label="Benchmark" color={C.gray}/>
+      <div style={{display:"flex",gap:4,background:C.bg1,borderRadius:10,padding:3,marginBottom:8}}>
+        {[["1J","1J"],["1W","1S"],["1M","1M"],["YTD","YTD"]].map(([k,lbl])=>(
+          <button key={k} onClick={()=>setBenchTF(k)} style={{flex:1,padding:"6px 0",borderRadius:7,
+            fontSize:11,fontWeight:700,border:"none",cursor:"pointer",
+            background:benchTF===k?C.blue:"transparent",color:benchTF===k?"#fff":C.gray}}>{lbl}</button>
+        ))}
+      </div>
       <div style={crd()}>
         {bench.map((b,i)=>(
           <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:i<bench.length-1?`1px solid ${C.border}`:"none"}}>
