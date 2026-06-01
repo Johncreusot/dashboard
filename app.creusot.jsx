@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.11";
+const APP_VERSION = "v1.12";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -674,12 +674,12 @@ const mnt=(val,hidden,prefix="")=>hidden?"***":(prefix+String(val));
 const uid=()=>"t"+Date.now();
 /* ═══════════════════════════════════════════════════════════
    STORAGE ENGINE v8 — GitHub Gist (multi-appareils) + localStorage (fallback offline)
-   Gist layout: un seul fichier gdb_data.json = { chart: [...], txns: [...] }
+   Bases locales = { chart: [...], txns: [...] }
 ═══════════════════════════════════════════════════════════ */
 /* ── Cloudflare Worker Storage ─────────────────────────────────── */
 const CF_WORKER_URL = "https://blue-firefly-2075watchlist-api.john-creusot.workers.dev";
 const CF_AUTH_KEY = "watchlist";
-const LS_KEY     = "gdb_sons_v8";
+const LS_KEY     = "cgi_portfolio_v1";
 
 /* Lit le Gist complet — retourne l'objet JSON ou null */
 async function cfRead(){
@@ -732,7 +732,7 @@ function lsRead(){ try{ const v=localStorage.getItem(LS_KEY); return v?JSON.pars
 function lsWrite(obj){ try{ localStorage.setItem(LS_KEY,JSON.stringify(obj)); }catch{} }
 
 /* Cache local pour ICON_DB — clé séparée pour éviter les conflits de taille */
-const LS_ICONS_KEY = "gdb_sons_icons_v1";
+const LS_ICONS_KEY = "cgi_icons_v1";
 function lsReadIcons(){ try{ const v=localStorage.getItem(LS_ICONS_KEY); return v?JSON.parse(v):null; }catch{ return null; } }
 function lsWriteIcons(db){ try{ localStorage.setItem(LS_ICONS_KEY,JSON.stringify(db)); }catch{} }
 
@@ -744,11 +744,14 @@ function lsWriteIcons(db){ try{ localStorage.setItem(LS_ICONS_KEY,JSON.stringify
    d'écrire/seeder le miroir. Rien ne change pour l'utilisateur.
    Chaque entrée est encapsulée : { v: <valeur>, t: <timestamp ms> }.
 ═══════════════════════════════════════════════════════════ */
-const LS_V9_KEY = "gdb_sons_v9";
+const LS_V9_KEY = "cgi_v1";
+// v1.12 — Nettoyage automatique des clés localStorage de l'ancien utilisateur (GDB & Sons)
+(()=>{ try{ ["gdb_sons_v8","gdb_sons_v9","gdb_sons_v9_dirty","gdb_sons_v9_migrated","gdb_sons_icons_v1"]
+  .forEach(k=>{ if(localStorage.getItem(k)!==null) localStorage.removeItem(k); }); }catch(e){} })();
 // Mêmes noms que les clés KV (cf. Worker /read & /write-bases ALLOWED)
 const LSV9_KEYS = [
-  "gdb_snapshots","gdb_txns","gdb_dd","gdb_gdbs","gdb_gc","gdb_gsb",
-  "gdb_cm","gdb_sm","gdb_tm","gdb_bench",
+  "gdb_snapshots","gdb_txns","gdb_dd","gdb_gdbs",
+  "gdb_cm","gdb_sm","gdb_tm",
   "gdb_portfolio","gdb_crypto","gdb_stocks","gdb_bank",
   "gdb_yfmap","gdb_icons",
 ];
@@ -794,8 +797,8 @@ function lsv9SeedFromKv(kv){
   console.info("[lsv9] seed KV→v9 : "+n+" base(s) remplie(s) (dirty/existant préservés)");
   return n;
 }
-// Migration unique v8 → v9 : chart→gdb_snapshots, txns→gdb_txns, icons→gdb_icons
-const LSV9_MIGRATED_FLAG = "gdb_sons_v9_migrated";
+// Migration unique : données chart → gdb_snapshots, transactions → gdb_txns, icônes → gdb_icons
+const LSV9_MIGRATED_FLAG = "cgi_v1_migrated";
 function migrateV8toV9(){
   try{
     if(localStorage.getItem(LSV9_MIGRATED_FLAG)==="1") return false;
@@ -838,7 +841,7 @@ async function load(k, fallback){
    est marquée "dirty" (gdb_sons_v9_dirty) pour un re-push ultérieur.
    ⚠ Aucune lecture ne dépend encore de v9 : on ne fait qu'ÉCRIRE.
 ═══════════════════════════════════════════════════════════ */
-const LSV9_DIRTY_FLAG = "gdb_sons_v9_dirty";
+const LSV9_DIRTY_FLAG = "cgi_v1_dirty";
 function lsv9DirtyList(){ try{ const r=localStorage.getItem(LSV9_DIRTY_FLAG); return r?JSON.parse(r):[]; }catch{ return []; } }
 function lsv9MarkDirty(key){ try{ const s=lsv9DirtyList(); if(s.indexOf(key)<0){ s.push(key); localStorage.setItem(LSV9_DIRTY_FLAG, JSON.stringify(s)); } }catch{} }
 function lsv9ClearDirty(key){ try{ const s=lsv9DirtyList().filter(function(k){return k!==key;}); localStorage.setItem(LSV9_DIRTY_FLAG, JSON.stringify(s)); }catch{} }
@@ -5933,9 +5936,7 @@ function CloudKeyList({data, onRefresh}){
     {key:"gdb_txns",      label:"Transactions"},
     {key:"gdb_dd",        label:"DD (historique quotidien)"},
     {key:"gdb_gdbs",      label:"CGIS (CGIC et CGIS)"},
-    {key:"gdb_gc",        label:"GC_FULL (CGIC historique)"},
-    {key:"gdb_gsb",       label:"GS_B100_EXT"},
-    {key:"gdb_cm",        label:"CRYPTO_MONTHLY"},
+        {key:"gdb_cm",        label:"CRYPTO_MONTHLY"},
     {key:"gdb_sm",        label:"STOCKS_MONTHLY"},
     {key:"gdb_tm",        label:"TOTAL_MONTHLY"},
     {key:"gdb_portfolio", label:"Portfolio (positions)"},
@@ -5944,8 +5945,7 @@ function CloudKeyList({data, onRefresh}){
     {key:"gdb_bank",      label:"Banque (cash matelas)"},
     {key:"gdb_yfmap",     label:"YF_MAP (tickers Yahoo)"},
     {key:"gdb_icons",     label:"Icônes personnalisées"},
-    {key:"gdb_bench",     label:"BENCH_IDX (indices BTC/ETH/SP500...)", cols:["Date","BTC $","ETH $","S&P 500","Nasdaq","MSCI World"]},
-  ];
+      ];
 
   function doDelete(keys, all) {
     setDeleting(all ? "all" : keys[0]);
@@ -6390,11 +6390,23 @@ function PageData({EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveG
       ) : (
         <div>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:11,color:C.gray}}>Données stockées dans Cloudflare KV</div>
-              <div style={{fontSize:10,fontWeight:700,color:C.btc}}>16 bases</div>
+            <div style={{fontSize:11,color:C.gray}}>Données stockées dans Cloudflare KV</div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={async()=>{
+                // v1.12 — Purge des clés KV obsolètes de l'ancien utilisateur
+                const obsolete=["gdb_gc","gdb_gsb","gdb_bench","gdb_tm"];
+                try{
+                  const r=await fetch(CF_WORKER_URL+"/delete",{
+                    method:"POST",
+                    headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+                    body:JSON.stringify({keys:obsolete}),signal:AbortSignal.timeout(10000)});
+                  const d=await r.json().catch(()=>({}));
+                  alert("Clés obsolètes purgées du KV :\n"+obsolete.join(", ")+"\n\n"+(d.ok?"✓ OK":"⚠ "+JSON.stringify(d)));
+                  doLoadCloud();
+                }catch(e){ alert("Erreur : "+e.message); }
+              }} style={{background:C.bg2,border:"1px solid "+C.red+"66",borderRadius:8,padding:"5px 10px",color:C.red,fontSize:10,fontWeight:700,cursor:"pointer"}}>🗑 Purger obsolètes</button>
+              <button onClick={doLoadCloud} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
             </div>
-            <button onClick={doLoadCloud} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
           </div>
           {cloudLoading && <div style={{textAlign:"center",padding:"30px 0",color:C.gray,fontSize:13}}>Chargement...</div>}
           {cloudError  && <div style={{background:C.red+"15",border:"1px solid "+C.red+"44",borderRadius:8,padding:"12px",color:C.red,fontSize:11}}>Erreur : {cloudError}</div>}
