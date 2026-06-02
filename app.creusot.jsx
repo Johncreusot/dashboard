@@ -178,7 +178,7 @@ const CG_MAP = {"BTC": "bitcoin", "ETH": "ethereum"};
 // Base d'icônes persistante : { ticker: { user: string|null, fmp: url|null } }
 // - user : icône choisie par l'utilisateur (emoji ou texte)
 // - fmp  : URL logo officiel récupéré via FMP (stocké pour éviter les re-fetches)
-// Sauvegardé dans gdb_icons sur Cloudflare KV
+// Sauvegardé dans cgi_icons sur Cloudflare KV
 let ICON_DB = {};
 // Compatibilité : CUSTOM_ICONS = alias en lecture seule sur ICON_DB.user
 // (pour le Proxy TICKER_ICONS existant)
@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.13";
+const APP_VERSION = "v1.14";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -745,15 +745,44 @@ function lsWriteIcons(db){ try{ localStorage.setItem(LS_ICONS_KEY,JSON.stringify
    Chaque entrée est encapsulée : { v: <valeur>, t: <timestamp ms> }.
 ═══════════════════════════════════════════════════════════ */
 const LS_V9_KEY = "cgi_v1";
+// v1.14 — Migration one-shot des sous-clés localStorage : gdb_* → cgi_*
+(()=>{
+  const MIGRATE_FLAG = "cgi_v1_ls_migrated";
+  const LS_MIGRATE_MAP = {
+    "cgi_snapshots":"cgi_snapshots","gdb_snapshots":"cgi_snapshots",
+    "gdb_txns":"cgi_txns","gdb_dd":"cgi_dd","gdb_gdbs":"cgi_gdbs",
+    "gdb_cm":"cgi_cm","gdb_sm":"cgi_sm","gdb_tm":"cgi_tm",
+    "gdb_portfolio":"cgi_portfolio","gdb_crypto":"cgi_crypto",
+    "gdb_stocks":"cgi_stocks","gdb_bank":"cgi_bank",
+    "gdb_yfmap":"cgi_yfmap","gdb_icons":"cgi_icons","gdb_snapshots":"cgi_snapshots",
+  };
+  try {
+    if (localStorage.getItem(MIGRATE_FLAG)) return;
+    const raw = localStorage.getItem("cgi_v1");
+    if (!raw) { localStorage.setItem(MIGRATE_FLAG,"1"); return; }
+    const container = JSON.parse(raw);
+    let changed = false;
+    // Pour chaque ancienne clé gdb_* présente dans le container, copier sous cgi_*
+    Object.entries(LS_MIGRATE_MAP).forEach(([oldK, newK])=>{
+      if (oldK !== newK && container[oldK] !== undefined && container[newK] === undefined) {
+        container[newK] = container[oldK];
+        delete container[oldK];
+        changed = true;
+      }
+    });
+    if (changed) localStorage.setItem("cgi_v1", JSON.stringify(container));
+    localStorage.setItem(MIGRATE_FLAG, "1");
+  } catch(e) {}
+})();
 // v1.12 — Nettoyage automatique des clés localStorage de l'ancien utilisateur (GDB & Sons)
 (()=>{ try{ ["gdb_sons_v8","gdb_sons_v9","gdb_sons_v9_dirty","gdb_sons_v9_migrated","gdb_sons_icons_v1"]
   .forEach(k=>{ if(localStorage.getItem(k)!==null) localStorage.removeItem(k); }); }catch(e){} })();
 // Mêmes noms que les clés KV (cf. Worker /read & /write-bases ALLOWED)
 const LSV9_KEYS = [
-  "gdb_snapshots","gdb_txns","gdb_dd","gdb_gdbs",
-  "gdb_cm","gdb_sm","gdb_tm",
-  "gdb_portfolio","gdb_crypto","gdb_stocks","gdb_bank",
-  "gdb_yfmap","gdb_icons",
+  "cgi_snapshots","cgi_txns","cgi_dd","cgi_gdbs",
+  "cgi_cm","cgi_sm","cgi_tm",
+  "cgi_portfolio","cgi_crypto","cgi_stocks","cgi_bank",
+  "cgi_yfmap","cgi_icons",
 ];
 function lsv9ReadAll(){ try{ const v=localStorage.getItem(LS_V9_KEY); return v?JSON.parse(v):{}; }catch{ return {}; } }
 function lsv9WriteAll(obj){ try{ localStorage.setItem(LS_V9_KEY, JSON.stringify(obj)); return true; }catch{ return false; } }
@@ -797,7 +826,7 @@ function lsv9SeedFromKv(kv){
   console.info("[lsv9] seed KV→v9 : "+n+" base(s) remplie(s) (dirty/existant préservés)");
   return n;
 }
-// Migration unique : données chart → gdb_snapshots, transactions → gdb_txns, icônes → gdb_icons
+// Migration unique : données chart → cgi_snapshots, transactions → cgi_txns, icônes → cgi_icons
 const LSV9_MIGRATED_FLAG = "cgi_v1_migrated";
 function migrateV8toV9(){
   try{
@@ -805,9 +834,9 @@ function migrateV8toV9(){
     const v8 = lsRead();           // { chart, txns }
     const icons = lsReadIcons();   // ICON_DB sérialisé
     const seed={};
-    if(v8 && v8.chart) seed.gdb_snapshots = v8.chart;
-    if(v8 && v8.txns)  seed.gdb_txns      = v8.txns;
-    if(icons)          seed.gdb_icons     = icons;
+    if(v8 && v8.chart) seed.cgi_snapshots = v8.chart;
+    if(v8 && v8.txns)  seed.cgi_txns      = v8.txns;
+    if(icons)          seed.cgi_icons     = icons;
     const n = lsv9SetMany(seed);
     localStorage.setItem(LSV9_MIGRATED_FLAG, "1");
     console.info("[lsv9] migration v8→v9 : "+n+" base(s) migrée(s) ("+Object.keys(seed).join(", ")+")");
@@ -1434,7 +1463,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
             setIconDb(ticker, { fmp: md.logoUrl });
             fetch(CF_WORKER_URL+"/write-bases", {
               method:"POST", headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-              body:JSON.stringify({gdb_icons:serializeIconDb()}), signal:AbortSignal.timeout(10000),
+              body:JSON.stringify({cgi_icons:serializeIconDb()}), signal:AbortSignal.timeout(10000),
             }).catch(()=>{});
           }
         }
@@ -1460,7 +1489,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
           fetch(CF_WORKER_URL+"/write-bases", {
             method:"POST",
             headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-            body: JSON.stringify({ gdb_icons: serializeIconDb() }),
+            body: JSON.stringify({ cgi_icons: serializeIconDb() }),
             signal: AbortSignal.timeout(10000),
           }).catch(()=>{});
         }
@@ -2943,7 +2972,7 @@ function setIconDb(ticker, patch){
   syncCustomIcons();
   lsWriteIcons(serializeIconDb()); // persistance locale immédiate
 }
-// Sérialise ICON_DB pour KV (clé gdb_icons)
+// Sérialise ICON_DB pour KV (clé cgi_icons)
 function serializeIconDb(){ return JSON.parse(JSON.stringify(ICON_DB)); }
 // Désérialise depuis KV et resync
 // Désérialise depuis KV et resync + persiste en localStorage
@@ -3002,7 +3031,7 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
       await fetch(CF_WORKER_URL+"/write-bases", {
         method:"POST",
         headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-        body: JSON.stringify({ gdb_icons: serializeIconDb() }),
+        body: JSON.stringify({ cgi_icons: serializeIconDb() }),
         signal: AbortSignal.timeout(10000),
       });
     } catch(e){}
@@ -5162,7 +5191,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF}){
         fetch(CF_WORKER_URL+"/write-bases", {
           method:"POST",
           headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-          body: JSON.stringify({ gdb_icons: serializeIconDb(), gdb_yfmap: YF_MAP }),
+          body: JSON.stringify({ cgi_icons: serializeIconDb(), cgi_yfmap: YF_MAP }),
           signal: AbortSignal.timeout(10000),
         }).catch(()=>{});
       }
@@ -5929,19 +5958,19 @@ function CloudKeyList({data, onRefresh}){
   var confirmAll = confirmAll_state[0]; var setConfirmAll = confirmAll_state[1];
 
   var CLOUD_KEYS = [
-    {key:"gdb_snapshots", label:"Snapshots journaliers (objets)"},
-    {key:"gdb_txns",      label:"Transactions"},
-    {key:"gdb_dd",        label:"Historique mensuel patrimoine"},
-    {key:"gdb_gdbs",      label:"Indices CGIC/CGIS (séries)"},
-        {key:"gdb_cm",        label:"Perfs mensuelles Crypto"},
-    {key:"gdb_sm",        label:"Perfs mensuelles Actions"},
-    {key:"gdb_tm",        label:"Perfs mensuelles Total"},
-    {key:"gdb_portfolio", label:"Portfolio (positions)"},
-    {key:"gdb_crypto",    label:"Crypto (positions)"},
-    {key:"gdb_stocks",    label:"Stocks (positions)"},
-    {key:"gdb_bank",      label:"Banque (cash matelas)"},
-    {key:"gdb_yfmap",     label:"Mapping tickers Yahoo Finance"},
-    {key:"gdb_icons",     label:"Icônes personnalisées"},
+    {key:"cgi_snapshots", label:"Snapshots journaliers (objets)"},
+    {key:"cgi_txns",      label:"Transactions"},
+    {key:"cgi_dd",        label:"Historique mensuel patrimoine"},
+    {key:"cgi_gdbs",      label:"Indices CGIC/CGIS (séries)"},
+        {key:"cgi_cm",        label:"Perfs mensuelles Crypto"},
+    {key:"cgi_sm",        label:"Perfs mensuelles Actions"},
+    {key:"cgi_tm",        label:"Perfs mensuelles Total"},
+    {key:"cgi_portfolio", label:"Portfolio (positions)"},
+    {key:"cgi_crypto",    label:"Crypto (positions)"},
+    {key:"cgi_stocks",    label:"Stocks (positions)"},
+    {key:"cgi_bank",      label:"Banque (cash matelas)"},
+    {key:"cgi_yfmap",     label:"Mapping tickers Yahoo Finance"},
+    {key:"cgi_icons",     label:"Icônes personnalisées"},
       ];
 
   function doDelete(keys, all) {
@@ -6390,15 +6419,31 @@ function PageData({EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveG
             <div style={{fontSize:11,color:C.gray}}>Données stockées dans Cloudflare KV</div>
             <div style={{display:"flex",gap:6}}>
               <button onClick={async()=>{
-                // v1.12 — Purge des clés KV obsolètes de l'ancien utilisateur
-                const obsolete=["gdb_gc","gdb_gsb","gdb_bench","gdb_tm"];
+                // v1.14 — Migration one-shot gdb_* → cgi_* dans le KV
+                if(!confirm("Migrer les clés KV de gdb_* vers cgi_* ?\n\nCette opération est réversible (les données sont copiées avant suppression). Elle est nécessaire si tu as des données de l'ancienne version.")) return;
+                try{
+                  const r=await fetch(CF_WORKER_URL+"/migrate-kv",{
+                    method:"POST",
+                    headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+                    signal:AbortSignal.timeout(30000)});
+                  const d=await r.json().catch(()=>({}));
+                  alert("Migration terminée !\n\n"+
+                    "✓ Migrées : "+(d.migrated||[]).length+" clés\n"+
+                    "⟳ Sautées : "+(d.skipped||[]).length+" clés\n"+
+                    (d.errors?.length?"⚠ Erreurs : "+d.errors.join(", "):"")+
+                    "\n\n"+(d.summary||""));
+                  doLoadCloud();
+                }catch(e){ alert("Erreur : "+e.message); }
+              }} style={{background:C.bg2,border:"1px solid "+C.teal+"88",borderRadius:8,padding:"5px 10px",color:C.teal,fontSize:10,fontWeight:700,cursor:"pointer"}}>🔄 Migrer gdb→cgi</button>
+              <button onClick={async()=>{
+                const obsolete=["cgi_gc","cgi_gsb","cgi_bench","gdb_gc","gdb_gsb","gdb_bench","gdb_tm"];
                 try{
                   const r=await fetch(CF_WORKER_URL+"/delete",{
                     method:"POST",
                     headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
                     body:JSON.stringify({keys:obsolete}),signal:AbortSignal.timeout(10000)});
                   const d=await r.json().catch(()=>({}));
-                  alert("Clés obsolètes purgées du KV :\n"+obsolete.join(", ")+"\n\n"+(d.ok?"✓ OK":"⚠ "+JSON.stringify(d)));
+                  alert("Clés obsolètes purgées :\n"+obsolete.join(", ")+"\n\n"+(d.ok?"✓ OK":"⚠ "+JSON.stringify(d)));
                   doLoadCloud();
                 }catch(e){ alert("Erreur : "+e.message); }
               }} style={{background:C.bg2,border:"1px solid "+C.red+"66",borderRadius:8,padding:"5px 10px",color:C.red,fontSize:10,fontWeight:700,cursor:"pointer"}}>🗑 Purger obsolètes</button>
@@ -6468,7 +6513,7 @@ function App(){
   const[gistError,setGistError]=useState(null);
   const[showGistDiag,setShowGistDiag]=useState(false);
   const[themeName,setThemeName]=useState(()=>{
-    try{ return localStorage.getItem('gdb_theme')||'dark'; }catch{ return 'dark'; }
+    try{ return localStorage.getItem('cgi_theme')||'dark'; }catch{ return 'dark'; }
   });
   const[showTheme,setShowTheme]=useState(false);
   // ── Écran de démarrage ──────────────────────────────────────────────────
@@ -6500,7 +6545,7 @@ function App(){
     C = THEMES[name]||THEMES.dark;
     cc = getCC();
     setThemeName(name);
-    try{ localStorage.setItem('gdb_theme', name); }catch{}
+    try{ localStorage.setItem('cgi_theme', name); }catch{}
     setShowTheme(false);
   };
 
@@ -6632,15 +6677,15 @@ function App(){
           lsv9SeedFromKv(kv);
           // Phase 3 v23.04 — /read KV a réussi → on est en ligne → re-pousser les bases dirty
           flushDirtyBases();
-          const kvPort=kv.gdb_portfolio,kvStk=kv.gdb_stocks,kvCryp=kv.gdb_crypto,kvBank=kv.gdb_bank;
+          const kvPort=kv.cgi_portfolio,kvStk=kv.cgi_stocks,kvCryp=kv.cgi_crypto,kvBank=kv.cgi_bank;
           if(kvPort&&kvCryp&&kvStk&&kvBank){
             const uE=CURRENT.usdEur,eU=1/uE;
             const cryptoT=kvCryp.total||(kvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
             const stocksT=kvStk.total||(kvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
             const bankUSD=Math.round((kvBank.totalEUR||0)*eU);
             const totalUSD=cryptoT+stocksT+bankUSD;
-            const lastGDBS=kv.gdb_gdbs&&kv.gdb_gdbs.length>0?kv.gdb_gdbs[kv.gdb_gdbs.length-1]:null;
-            const lastDD_kv=kv.gdb_dd&&kv.gdb_dd.length>0?kv.gdb_dd[kv.gdb_dd.length-1]:null;
+            const lastGDBS=kv.cgi_gdbs&&kv.cgi_gdbs.length>0?kv.cgi_gdbs[kv.cgi_gdbs.length-1]:null;
+            const lastDD_kv=kv.cgi_dd&&kv.cgi_dd.length>0?kv.cgi_dd[kv.cgi_dd.length-1]:null;
             const kvDate = lastDD_kv?.[0] || kvPort.date || "—";
             setKvData_snap({totalUSD,totalEUR:Math.round(totalUSD*uE),date:kvDate,gdbS:lastGDBS?.[1]||CURRENT.gdbS,gdbC:lastGDBS?.[2]||CURRENT.gdbC,raw:kv});
           } else { setKvError("Bases KV incomplètes"); }
@@ -6665,25 +6710,25 @@ function App(){
         live.forEach(r=>{ if(r[0]) map[r[0]] = r; }); // live écrase si même date
         return Object.values(map).sort((a,b)=>a[0].localeCompare(b[0]));
       };
-      if(kv.gdb_dd)    setLiveDD(_mergeArrays(DD, kv.gdb_dd));
-      if(kv.gdb_gdbs)  setLiveGDBS(_mergeArrays(GDBS, kv.gdb_gdbs));
-      if(kv.gdb_gc)    setLiveGC(_mergeArrays(GC_FULL, kv.gdb_gc));
-      if(kv.gdb_gsb)   setLiveGSB(_mergeArrays(GS_B100_EXT, kv.gdb_gsb));
-      if(kv.gdb_cm)    setLiveCM(kv.gdb_cm);
-      if(kv.gdb_sm)    setLiveSM(kv.gdb_sm);
-      if(kv.gdb_tm)    setLiveTM(kv.gdb_tm);
-      if(kv.gdb_bench) setLiveBench(kv.gdb_bench);
-      if(kv.gdb_yfmap&&typeof kv.gdb_yfmap==="object") Object.assign(YF_MAP,kv.gdb_yfmap);
-      if(kv.gdb_icons&&typeof kv.gdb_icons==="object"){
+      if(kv.cgi_dd)    setLiveDD(_mergeArrays(DD, kv.cgi_dd));
+      if(kv.cgi_gdbs)  setLiveGDBS(_mergeArrays(GDBS, kv.cgi_gdbs));
+      if(kv.cgi_gc)    setLiveGC(_mergeArrays(GC_FULL, kv.cgi_gc));
+      if(kv.cgi_gsb)   setLiveGSB(_mergeArrays(GS_B100_EXT, kv.cgi_gsb));
+      if(kv.cgi_cm)    setLiveCM(kv.cgi_cm);
+      if(kv.cgi_sm)    setLiveSM(kv.cgi_sm);
+      if(kv.cgi_tm)    setLiveTM(kv.cgi_tm);
+      if(kv.cgi_bench) setLiveBench(kv.cgi_bench);
+      if(kv.cgi_yfmap&&typeof kv.cgi_yfmap==="object") Object.assign(YF_MAP,kv.cgi_yfmap);
+      if(kv.cgi_icons&&typeof kv.cgi_icons==="object"){
         // Merger : KV écrase les entrées existantes (KV = vérité cloud)
         // mais on conserve les entrées localStorage qui ne seraient pas dans KV
-        const merged = { ...serializeIconDb(), ...kv.gdb_icons };
+        const merged = { ...serializeIconDb(), ...kv.cgi_icons };
         loadIconDb(merged); // charge + persiste en localStorage
         seedBankLogos();    // réinjecter les URLs banque (toujours fixes)
         lsWriteIcons(serializeIconDb());
         bumpIconDb();
       }
-      const kvPort=kv.gdb_portfolio,kvCryp=kv.gdb_crypto,kvStk=kv.gdb_stocks,kvBank=kv.gdb_bank;
+      const kvPort=kv.cgi_portfolio,kvCryp=kv.cgi_crypto,kvStk=kv.cgi_stocks,kvBank=kv.cgi_bank;
       if(kvPort&&kvCryp&&kvStk&&kvBank){
         const uE=CURRENT.usdEur,eU=1/uE;
         const cryptoT=kvCryp.total||(kvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
@@ -6722,47 +6767,47 @@ function App(){
           // Récupère une txn ajoutée offline (présente en local, pas en KV) ET
           // une txn faite sur un autre appareil (présente en KV, pas en local).
           try{
-            const kvTx = Array.isArray(kvData.gdb_txns) ? kvData.gdb_txns : [];
+            const kvTx = Array.isArray(kvData.cgi_txns) ? kvData.cgi_txns : [];
             const merged = unionTxnsById(tx, kvTx);   // local prioritaire, puis cloud-only
             if(merged.length !== tx.length || merged.length !== kvTx.length){
               setTxns(merged);
-              lsv9Set('gdb_txns', merged);
+              lsv9Set('cgi_txns', merged);
               console.info("[txns] fusion local("+tx.length+") ∪ KV("+kvTx.length+") = "+merged.length+" ligne(s)");
             }
             if(merged.length > kvTx.length){   // le local apporte des txns absentes du cloud → re-push
-              saveBase('gdb_txns', merged);
+              saveBase('cgi_txns', merged);
               console.info("[txns] re-push KV : "+(merged.length - kvTx.length)+" txn(s) locale(s) manquante(s)");
             }
           }catch(e){ console.warn("[txns] réconciliation échouée:", e && e.message); }
           // Phase 3 v23.06 — réconciliation des snapshots (fusion par date d).
           // Récupère un snapshot local-only ET un snapshot fait sur un autre appareil,
-          // et popule la clé canonique gdb_snapshots (restée vide jusqu'ici).
+          // et popule la clé canonique cgi_snapshots (restée vide jusqu'ici).
           try{
-            const kvSnap = Array.isArray(kvData.gdb_snapshots) ? kvData.gdb_snapshots : [];
+            const kvSnap = Array.isArray(kvData.cgi_snapshots) ? kvData.cgi_snapshots : [];
             const mergedSnap = unionSnapsByDate(cd, kvSnap);
             if(mergedSnap.length !== cd.length || mergedSnap.length !== kvSnap.length){
               setChartData(mergedSnap);
-              lsv9Set('gdb_snapshots', mergedSnap);
+              lsv9Set('cgi_snapshots', mergedSnap);
               console.info("[snap] fusion local("+cd.length+") ∪ KV("+kvSnap.length+") = "+mergedSnap.length+" point(s)");
             }
             if(mergedSnap.length > kvSnap.length){   // local apporte des dates absentes du cloud → re-push
-              saveBase('gdb_snapshots', mergedSnap);
+              saveBase('cgi_snapshots', mergedSnap);
               console.info("[snap] re-push KV : "+(mergedSnap.length - kvSnap.length)+" snapshot(s) manquant(s)");
             }
           }catch(e){ console.warn("[snap] réconciliation échouée:", e && e.message); }
           // Remplacer les séries statiques si KV a des données plus récentes
-          const kvDD   = kvData.gdb_dd;
-          const kvGDBS = kvData.gdb_gdbs;
-          const kvGC   = kvData.gdb_gc;
-          const kvGSB  = kvData.gdb_gsb;
-          const kvCM   = kvData.gdb_cm;
-          const kvSM   = kvData.gdb_sm;
-          const kvTM   = kvData.gdb_tm;
-          const kvYF   = kvData.gdb_yfmap;
-          const kvPort = kvData.gdb_portfolio;
-          const kvCryp = kvData.gdb_crypto;
-          const kvStk  = kvData.gdb_stocks;
-          const kvBank = kvData.gdb_bank;
+          const kvDD   = kvData.cgi_dd;
+          const kvGDBS = kvData.cgi_gdbs;
+          const kvGC   = kvData.cgi_gc;
+          const kvGSB  = kvData.cgi_gsb;
+          const kvCM   = kvData.cgi_cm;
+          const kvSM   = kvData.cgi_sm;
+          const kvTM   = kvData.cgi_tm;
+          const kvYF   = kvData.cgi_yfmap;
+          const kvPort = kvData.cgi_portfolio;
+          const kvCryp = kvData.cgi_crypto;
+          const kvStk  = kvData.cgi_stocks;
+          const kvBank = kvData.cgi_bank;
 
           // N'utiliser les données KV que si elles sont plus récentes que le build
           const buildLastDate = DD[DD.length-1] && DD[DD.length-1][0];
@@ -6773,17 +6818,17 @@ function App(){
           // au lieu d'un remplacement en bloc. KV prioritaire sur conflit ; re-push des
           // dates présentes en local mais absentes du cloud (récupère un snapshot offline).
           try {
-            const mergedDD = unionSeriesByDate(unionSeriesByDate(DD, lsv9Get('gdb_dd')), kvDD);
+            const mergedDD = unionSeriesByDate(unionSeriesByDate(DD, lsv9Get('cgi_dd')), kvDD);
             setLiveDD(mergedDD);
-            lsv9Set('gdb_dd', mergedDD);
+            lsv9Set('cgi_dd', mergedDD);
             const kvDDlen = (kvDD&&kvDD.length)||0;
-            if(mergedDD.length > kvDDlen){ saveBase('gdb_dd', mergedDD); console.info("[dd] re-push KV : "+(mergedDD.length-kvDDlen)+" date(s) locale(s)"); }
+            if(mergedDD.length > kvDDlen){ saveBase('cgi_dd', mergedDD); console.info("[dd] re-push KV : "+(mergedDD.length-kvDDlen)+" date(s) locale(s)"); }
 
-            const mergedGDBS = unionSeriesByDate(unionSeriesByDate(GDBS, lsv9Get('gdb_gdbs')), kvGDBS);
+            const mergedGDBS = unionSeriesByDate(unionSeriesByDate(GDBS, lsv9Get('cgi_gdbs')), kvGDBS);
             setLiveGDBS(mergedGDBS);
-            lsv9Set('gdb_gdbs', mergedGDBS);
+            lsv9Set('cgi_gdbs', mergedGDBS);
             const kvGlen = (kvGDBS&&kvGDBS.length)||0;
-            if(mergedGDBS.length > kvGlen){ saveBase('gdb_gdbs', mergedGDBS); console.info("[gdbs] re-push KV : "+(mergedGDBS.length-kvGlen)+" date(s) locale(s)"); }
+            if(mergedGDBS.length > kvGlen){ saveBase('cgi_gdbs', mergedGDBS); console.info("[gdbs] re-push KV : "+(mergedGDBS.length-kvGlen)+" date(s) locale(s)"); }
             console.info("[dd] fusion DD="+mergedDD.length+" · GDBS="+mergedGDBS.length);
           } catch(e){ console.warn("[dd] réconciliation DD/GDBS échouée:", e && e.message); }
 
@@ -7175,9 +7220,9 @@ function App(){
     // 1. Sauvegarder les snapshots journaliers
     try {
       await save(SK.chart, next);
-      saveBase('gdb_snapshots', next);   // Phase 3 — base canonique : miroir v9 local + KV gdb_snapshots
-      saveBase('gdb_dd',   newDD);       // Phase 3 v23.08 — série DD : miroir v9 + KV + offline dirty
-      saveBase('gdb_gdbs', newGDBS);     // Phase 3 v23.08 — série GDBS
+      saveBase('cgi_snapshots', next);   // Phase 3 — base canonique : miroir v9 local + KV cgi_snapshots
+      saveBase('cgi_dd',   newDD);       // Phase 3 v23.08 — série DD : miroir v9 + KV + offline dirty
+      saveBase('cgi_gdbs', newGDBS);     // Phase 3 v23.08 — série GDBS
       uploadLog.push("✓ Snapshots journaliers ("+next.length+" points)");
     } catch(e){ uploadErrors.push("✗ Snapshots : "+e.message); }
 
@@ -7186,25 +7231,25 @@ function App(){
     for(let attempt = 1; attempt <= 3 && !basesOk; attempt++){
       try {
         const bases = {
-          gdb_txns: txns,
-          gdb_bench: newBench || liveBench || BENCH_IDX,
+          cgi_txns: txns,
+          cgi_bench: newBench || liveBench || BENCH_IDX,
           // Séries temporelles
-          gdb_dd:   newDD,
-          gdb_gdbs: newGDBS,
-          gdb_gc:   newGC,
-          gdb_gsb:  newGSB,
+          cgi_dd:   newDD,
+          cgi_gdbs: newGDBS,
+          cgi_gc:   newGC,
+          cgi_gsb:  newGSB,
           // Monthly
-          gdb_cm:   newCM,
-          gdb_sm:   newSM,
-          gdb_tm:   newTM,
+          cgi_cm:   newCM,
+          cgi_sm:   newSM,
+          cgi_tm:   newTM,
           // Portfolio complet
-          gdb_portfolio: (EFF||CURRENT).portfolio || CURRENT.portfolio,
-          gdb_crypto:    (EFF||CURRENT).crypto    || CURRENT.crypto,
-          gdb_stocks:    (EFF||CURRENT).stocks    || CURRENT.stocks,
-          gdb_bank:      (EFF||CURRENT).bank      || CURRENT.bank,
+          cgi_portfolio: (EFF||CURRENT).portfolio || CURRENT.portfolio,
+          cgi_crypto:    (EFF||CURRENT).crypto    || CURRENT.crypto,
+          cgi_stocks:    (EFF||CURRENT).stocks    || CURRENT.stocks,
+          cgi_bank:      (EFF||CURRENT).bank      || CURRENT.bank,
           // YF_MAP (tickers refresh)
-          gdb_yfmap: YF_MAP,
-          gdb_icons: serializeIconDb(),
+          cgi_yfmap: YF_MAP,
+          cgi_icons: serializeIconDb(),
         };
         const res = await fetch(CF_WORKER_URL+"/write-bases", {
           method:"POST",
@@ -7219,42 +7264,42 @@ function App(){
         const src    = EFF || CURRENT;
         // Ligne par base — on reprend les mêmes valeurs que dans le log local pour cohérence
         const snapDate = snap.d || today();
-        if(written.has("gdb_bench")){
+        if(written.has("cgi_bench")){
           const btc = newBench?.find(r=>r.d===snapDate);
           uploadLog.push("✓ BENCH_IDX : BTC="+(btc?"$"+btc.BTC:"—")+(btc?.ETH?" ETH=$"+btc.ETH:"")+" ("+snapDate+")");
         }
-        if(written.has("gdb_dd")){
+        if(written.has("cgi_dd")){
           const row = newDD?.find(r=>r.d===snapDate);
           uploadLog.push("✓ DD : "+(row?"ligne ("+snapDate+")":"mis à jour"));
         }
-        if(written.has("gdb_gdbs")){
+        if(written.has("cgi_gdbs")){
           const row = newGDBS?.find(r=>r.d===snapDate);
           uploadLog.push("✓ GDBS : "+(row?"GDB.S="+row["GDB.S"]+", CGIC="+row["GDB.C"]:"mis à jour"));
         }
-        if(written.has("gdb_gc"))  uploadLog.push("✓ GC_FULL : mis à jour");
-        if(written.has("gdb_gsb")){
+        if(written.has("cgi_gc"))  uploadLog.push("✓ GC_FULL : mis à jour");
+        if(written.has("cgi_gsb")){
           const row = newGSB?.find(r=>r.d===snapDate);
           uploadLog.push("✓ GS_B100_EXT : "+(row?row["GS.B100"]:"mis à jour"));
         }
-        if(written.has("gdb_cm")){
+        if(written.has("cgi_cm")){
           const last = newCM && newCM[newCM.length-1];
           uploadLog.push("✓ CRYPTO_MONTHLY : "+(last?last.y+" "+last.m+" EOM=€"+last.eur:"mis à jour"));
         }
-        if(written.has("gdb_sm")){
+        if(written.has("cgi_sm")){
           const last = newSM && newSM[newSM.length-1];
           uploadLog.push("✓ STOCKS_MONTHLY : "+(last?"€"+last.eur:"mis à jour"));
         }
-        if(written.has("gdb_tm")){
+        if(written.has("cgi_tm")){
           const last = newTM && newTM[newTM.length-1];
           uploadLog.push("✓ TOTAL_MONTHLY : "+(last?"€"+last.eur:"mis à jour"));
         }
-        if(written.has("gdb_txns"))     uploadLog.push("✓ Transactions : "+txns.length+" lignes");
-        if(written.has("gdb_portfolio")) uploadLog.push("✓ Portfolio : sauvegardé");
-        if(written.has("gdb_crypto"))   uploadLog.push("✓ Crypto : sauvegardé");
-        if(written.has("gdb_stocks"))   uploadLog.push("✓ Stocks : sauvegardé");
-        if(written.has("gdb_bank"))     uploadLog.push("✓ Bank : sauvegardé");
-        if(written.has("gdb_yfmap"))    uploadLog.push("✓ YF_MAP : "+Object.keys(YF_MAP).length+" tickers");
-        if(written.has("gdb_icons"))    uploadLog.push("✓ ICON_DB : "+Object.keys(ICON_DB).length+" icônes");
+        if(written.has("cgi_txns"))     uploadLog.push("✓ Transactions : "+txns.length+" lignes");
+        if(written.has("cgi_portfolio")) uploadLog.push("✓ Portfolio : sauvegardé");
+        if(written.has("cgi_crypto"))   uploadLog.push("✓ Crypto : sauvegardé");
+        if(written.has("cgi_stocks"))   uploadLog.push("✓ Stocks : sauvegardé");
+        if(written.has("cgi_bank"))     uploadLog.push("✓ Bank : sauvegardé");
+        if(written.has("cgi_yfmap"))    uploadLog.push("✓ YF_MAP : "+Object.keys(YF_MAP).length+" tickers");
+        if(written.has("cgi_icons"))    uploadLog.push("✓ ICON_DB : "+Object.keys(ICON_DB).length+" icônes");
         // Clés échouées (dans ALLOWED mais non écrites)
         const failed = Object.keys(bases).filter(k=>!written.has(k));
         failed.forEach(k=>uploadErrors.push("✗ "+k+" : non confirmé"));
@@ -7273,8 +7318,8 @@ function App(){
 
   const addTxn=useCallback(async t=>{
     const next=[t,...txns];setTxns(next);
-    await save(SK.txns,next);                 // legacy (gdb_sons_v8 + KV gdb_data) — inchangé
-    saveBase('gdb_txns', next);               // Phase 2 — base canonique : miroir v9 local + KV gdb_txns
+    await save(SK.txns,next);                 // legacy (gdb_sons_v8 + KV cgi_data) — inchangé
+    saveBase('cgi_txns', next);               // Phase 2 — base canonique : miroir v9 local + KV cgi_txns
   },[txns]);
 
   const applyTradeToEFF=useCallback(trade=>{
@@ -7334,7 +7379,7 @@ function App(){
 
   const delTxn=useCallback(async id=>{
     const next=txns.filter(t=>t.id!==id);setTxns(next);await save(SK.txns,next);
-    saveBase('gdb_txns', next);   // Phase 3 — propager la suppression vers la base canonique
+    saveBase('cgi_txns', next);   // Phase 3 — propager la suppression vers la base canonique
   },[txns]);
 
   if(!ready)return(
