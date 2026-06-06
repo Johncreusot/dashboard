@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <meta name="robots" content="noindex, nofollow"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="CREUSOT GLOBAL INVESTMENTS"/>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png"/>
+  <title>CREUSOT GLOBAL INVESTMENTS</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#07080D;overflow-x:hidden}
+    #root{min-height:100vh}
+    #loader{
+      position:fixed;inset:0;background:#07080D;
+      display:flex;flex-direction:column;
+      align-items:center;justify-content:center;
+      gap:20px;z-index:9999;transition:opacity .5s ease;
+    }
+    .btc-wrap{position:relative;width:100px;height:100px;display:flex;align-items:center;justify-content:center;}
+    .btc-glow{position:absolute;inset:0;border-radius:50%;background:radial-gradient(circle,#F7931A 0%,transparent 70%);opacity:0;animation:glowPulse 2.4s ease-in-out forwards;}
+    .btc-glow2{position:absolute;width:160%;height:160%;top:-30%;left:-30%;border-radius:50%;background:radial-gradient(circle,#F7931A44 0%,transparent 65%);opacity:0;animation:glowPulse2 2.4s ease-in-out forwards;}
+    .btc-glow3{position:absolute;width:240%;height:240%;top:-70%;left:-70%;border-radius:50%;background:radial-gradient(circle,#F7931A22 0%,transparent 60%);opacity:0;animation:glowPulse3 2.4s ease-in-out forwards;}
+    .btc-symbol{position:relative;z-index:2;font-size:58px;color:#1a0e00;animation:btcLight 2.4s ease-in-out forwards, btcBreath 2.6s 2.4s ease-in-out infinite;filter:drop-shadow(0 0 0px #F7931A);user-select:none;}
+    .progress-bar{width:160px;height:3px;background:#1C2130;border-radius:2px;overflow:hidden;animation:barPulse 1.8s 2.2s ease-in-out infinite;}
+    .progress-fill{height:100%;background:linear-gradient(90deg,#F7931A88,#F7931A);border-radius:2px;animation:progressFill 2.2s ease-in-out forwards;}
+    .loader-label{font-family:system-ui,sans-serif;font-size:18px;font-weight:800;color:#F7931A;opacity:0;animation:fadeLabel 2.4s ease-in-out forwards;letter-spacing:.5px;}
+    .loader-sub{font-family:system-ui,sans-serif;font-size:11px;color:#4B5563;opacity:0;animation:fadeLabel 2.4s .3s ease-in-out forwards;letter-spacing:1px;}
+    @keyframes glowPulse{0%{opacity:0;transform:scale(.6)}30%{opacity:0}60%{opacity:.5;transform:scale(.95)}85%{opacity:.9;transform:scale(1)}100%{opacity:1;transform:scale(1)}}
+    @keyframes glowPulse2{0%{opacity:0}40%{opacity:0}70%{opacity:.5}100%{opacity:.8}}
+    @keyframes glowPulse3{0%{opacity:0}55%{opacity:0}80%{opacity:.3}100%{opacity:.6}}
+    @keyframes btcLight{0%{color:#1a0e00;filter:drop-shadow(0 0 0px #F7931A)}20%{color:#3d1e00;filter:drop-shadow(0 0 4px #F7931A)}50%{color:#8B4500;filter:drop-shadow(0 0 12px #F7931A)}80%{color:#D4700A;filter:drop-shadow(0 0 24px #F7931A)}100%{color:#F7931A;filter:drop-shadow(0 0 36px #F7931A) drop-shadow(0 0 8px #FFB347)}}
+    @keyframes progressFill{0%{width:0%}20%{width:15%}50%{width:45%}75%{width:70%}90%{width:88%}100%{width:100%}}
+    @keyframes fadeLabel{0%{opacity:0;transform:translateY(6px)}40%{opacity:0;transform:translateY(6px)}70%{opacity:.7;transform:translateY(0)}100%{opacity:1;transform:translateY(0)}}
+    @keyframes btcBreath{0%,100%{filter:drop-shadow(0 0 36px #F7931A) drop-shadow(0 0 8px #FFB347);transform:scale(1)}50%{filter:drop-shadow(0 0 20px #F7931A) drop-shadow(0 0 4px #FFB347);transform:scale(.97)}}
+    @keyframes barPulse{0%,100%{opacity:1}50%{opacity:.4}}
+  </style>
+</head>
+<body>
+  <div id="loader">
+    <div class="btc-wrap">
+      <div class="btc-glow3"></div>
+      <div class="btc-glow2"></div>
+      <div class="btc-glow"></div>
+      <div class="btc-symbol">₿</div>
+    </div>
+    <div class="loader-label">CREUSOT GLOBAL INVESTMENTS</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+    <div class="loader-sub">Chargement...</div>
+  </div>
+  <div id="root"></div>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Donnees en dur chargees en script simple (non-Babel) : parse natif rapide -->
+  <script src="seeds.js?v=1.0"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=1.0"></script>
+  <script>
+    // Le splash reste affiche (logo + barre animes) jusqu'a ce que l'app React soit prete :
+    // c'est l'app qui retire #loader quand le chargement des donnees est termine.
+    // Filet de securite : retrait force apres 30s si l'app n'a jamais signale.
+    window.__hideLoader=function(){
+      var l=document.getElementById('loader');
+      if(l && l.style.display!=='none'){ l.style.opacity='0'; setTimeout(function(){ l.style.display='none'; },500); }
+    };
+    setTimeout(window.__hideLoader, 30000);
+  </script>
+</body>
+</html>
