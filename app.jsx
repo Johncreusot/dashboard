@@ -7207,17 +7207,32 @@ function App(){
           // Phase 3 v23.04 — /read KV a réussi → on est en ligne → re-pousser les bases dirty
           flushDirtyBases();
           const kvPort=kv.cgi_portfolio,kvStk=kv.cgi_stocks,kvCryp=kv.cgi_crypto,kvBank=kv.cgi_bank;
-          if(kvPort&&kvCryp&&kvStk&&kvBank){
-            const uE=CURRENT.usdEur,eU=1/uE;
-            const cryptoT=kvCryp.total||(kvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
-            const stocksT=kvStk.total||(kvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
-            const bankUSD=Math.round((kvBank.totalEUR||0)*eU);
-            const totalUSD=cryptoT+stocksT+bankUSD;
-            const lastGDBS=kv.cgi_gdbs&&kv.cgi_gdbs.length>0?kv.cgi_gdbs[kv.cgi_gdbs.length-1]:null;
-            const lastDD_kv=kv.cgi_dd&&kv.cgi_dd.length>0?kv.cgi_dd[kv.cgi_dd.length-1]:null;
-            const kvDate = lastDD_kv?.[0] || kvPort.date || "—";
-            setKvData_snap({totalUSD,totalEUR:Math.round(totalUSD*uE),date:kvDate,gdbS:lastGDBS?.[1]||CURRENT.gdbS,gdbC:lastGDBS?.[2]||CURRENT.gdbC,raw:kv});
-          } else { setKvError("Bases KV incomplètes"); }
+          // v1.0 CGI — fallback sur CURRENT si les bases portfolio manquent dans le KV
+          const cryptoSrc = kvCryp || CURRENT.crypto;
+          const stocksSrc = kvStk  || CURRENT.stocks;
+          const bankSrc   = kvBank || CURRENT.bank;
+          const uE=CURRENT.usdEur, eU=1/uE;
+          const cryptoT=cryptoSrc.total||(cryptoSrc.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const stocksT=stocksSrc.total||(stocksSrc.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const bankUSD=Math.round((bankSrc.totalEUR||0)*eU);
+          const totalUSD=cryptoT+stocksT+bankUSD;
+          const lastGDBS=kv.cgi_gdbs&&kv.cgi_gdbs.length>0?kv.cgi_gdbs[kv.cgi_gdbs.length-1]:null;
+          const lastDD_kv=kv.cgi_dd&&kv.cgi_dd.length>0?kv.cgi_dd[kv.cgi_dd.length-1]:null;
+          const kvDate = lastDD_kv?.[0] || (kvPort||{}).date || CURRENT.date || "—";
+          setKvData_snap({totalUSD:totalUSD||CURRENT.totalUSD,totalEUR:Math.round((totalUSD||CURRENT.totalUSD)*uE),date:kvDate,gdbS:lastGDBS?.[1]||CURRENT.gdbS,gdbC:lastGDBS?.[2]||CURRENT.gdbC,raw:kv});
+          // Auto-init : pousser les bases portfolio vers le KV si absentes
+          if(!kvPort||!kvCryp||!kvStk||!kvBank){
+            fetch(`${CF_WORKER_URL}/write-bases`,{method:"POST",signal:AbortSignal.timeout(20000),
+              headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+              body:JSON.stringify({
+                cgi_portfolio: CURRENT.portfolio||{date:CURRENT.date,items:[]},
+                cgi_crypto:    CURRENT.crypto,
+                cgi_stocks:    CURRENT.stocks,
+                cgi_bank:      CURRENT.bank,
+              })
+            }).then(()=>console.info("[kv-init] bases portfolio poussées vers le KV"))
+              .catch(e=>console.warn("[kv-init] échec push portfolio:",e&&e.message));
+          }
         } else { setKvError("KV inaccessible ("+res.status+")"); }
       } catch(e){ setKvError("KV hors ligne"); }
       setStartLoading(false);
