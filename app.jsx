@@ -7935,7 +7935,19 @@ function App(){
         });
         const data = await res.json();
         if(!res.ok) throw new Error("HTTP "+res.status+" — "+(data.error||""));
-        const written = new Set(data.written||[]);
+        let written = new Set(data.written||[]);
+        // v1.0 CGI — fallback : si le batch n'a rien écrit, tenter clé par clé
+        if(written.size === 0){
+          console.warn("[snapshot] batch write-bases vide — fallback saveBase individuel");
+          const indivWritten = [];
+          await Promise.all(Object.entries(bases).map(async([k,v])=>{
+            if(v==null) return;
+            const ok = await saveBase(k,v);
+            if(ok) indivWritten.push(k);
+          }));
+          written = new Set(indivWritten);
+          console.info("[snapshot] fallback écrit:", indivWritten.join(", "));
+        }
         const snap   = snapResult.snap || {};
         const src    = EFF || CURRENT;
         // Ligne par base — on reprend les mêmes valeurs que dans le log local pour cohérence
