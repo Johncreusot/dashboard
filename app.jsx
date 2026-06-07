@@ -691,7 +691,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.0";
+const APP_VERSION = "v2.06";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6667,7 +6667,9 @@ function PageData(
 
   function handleViewMode(mode){
     setViewMode(mode);
-    if(mode==="cloud" && !cloudData && !cloudLoading) doLoadCloud();
+    // v2.06 — doLoadCloud si: pas encore chargé OU cloudData entièrement vide (boot race)
+    var _kvHasData = cloudData && Object.keys(cloudData).some(function(k){ return cloudData[k]!=null; });
+    if(mode==="cloud" && !_kvHasData && !cloudLoading) doLoadCloud();
   }
 
   function getLast(arr){ return (arr && arr.length>0 && arr[arr.length-1]) ? (arr[arr.length-1][0]||"—") : "—"; }
@@ -6948,7 +6950,7 @@ function PageData(
               <div style={{fontSize:11,color:C.gray}}>Données stockées dans Cloudflare KV</div>
               <div style={{fontSize:10,fontWeight:700,color:C.btc}}>16 bases</div>
             </div>
-            <button onClick={doLoadCloud} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
+            <button onClick={()=>{ setCloudData(null); setCloudLoading(false); }} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
           </div>
           {cloudLoading && <div style={{textAlign:"center",padding:"30px 0",color:C.gray,fontSize:13}}>Chargement...</div>}
           {cloudError  && <div style={{background:C.red+"15",border:"1px solid "+C.red+"44",borderRadius:8,padding:"12px",color:C.red,fontSize:11}}>Erreur : {cloudError}</div>}
@@ -7662,6 +7664,8 @@ function App(){
       }
 
       setReady(true);
+      // v2.06 — forcer un refresh DATA KV 4s après le boot (saveBase async terminés)
+      setTimeout(function(){ setKvRefreshTick(function(k){ return k+1; }); }, 4000);
     })();
   },[]);
 
