@@ -6617,6 +6617,8 @@ function PageData(
 {EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex}){
   var _DD   = liveDD   || DD;
   var _INV  = liveInv  || INV_SEED;
+  // v1.0 CGI — enregistrer le refresh KV pour pouvoir l'appeler depuis App()
+  React.useEffect(()=>{ window.__cgiKvRefresh = doLoadCloud; return ()=>{ delete window.__cgiKvRefresh; }; });
   var _FUT  = liveFutures || SEED_FUTURES;
   var _ANX  = liveIbkrAnnex || SEED_IBKR_ANNEX;
   var _GDBS = liveGDBS || GDBS;
@@ -6662,7 +6664,7 @@ function PageData(
 
   function handleViewMode(mode){
     setViewMode(mode);
-    if(mode==="cloud" && !cloudData && !cloudLoading) doLoadCloud();
+    if(mode==="cloud" && !cloudLoading) doLoadCloud(); // v1.0 CGI: toujours refresh à l'ouverture
   }
 
   function getLast(arr){ return (arr && arr.length>0 && arr[arr.length-1]) ? (arr[arr.length-1][0]||"—") : "—"; }
@@ -6833,10 +6835,10 @@ function PageData(
     // Séries temporelles
     {name:"DD",          dbKey:"DD",          count:_DD.length,              last:getLast(_DD)},
     {name:"CGIS/CGIC",   dbKey:"CGIS_CGIC",    count:_GDBS.length,            last:getLast(_GDBS)},
-    {name:"GC_FULL",     dbKey:"GC_FULL",      count:_GC.length,              last:getLast(_GC)},
-    {name:"GS_B100_EXT", dbKey:"GS_B100",      count:_GSB.length,             last:getLast(_GSB)},
-    {name:"BENCH_IDX",   dbKey:"BENCH_IDX",    count:_BENCH.length,           last:getLast(_BENCH)},
-    {name:"DB",          dbKey:"DB",           count:DB.length,               last:getLast(DB)},
+    {name:"CGIC · Historique cours",  dbKey:"GC_FULL",  count:_GC.length,    last:getLast(_GC)},
+    {name:"CGIS · Base 100",          dbKey:"GS_B100",  count:_GSB.length,   last:getLast(_GSB)},
+    {name:"Benchmarks marchés",       dbKey:"BENCH_IDX",count:_BENCH.length,  last:getLast(_BENCH)},
+    {name:"Comparaison base 100",     dbKey:"DB",       count:DB.length,      last:getLast(DB)},
     // Monthly
     {name:"CRYPTO_M",    dbKey:"MONTHLY",      count:countMonthly(_CM),       last:lastMonthly(_CM)},
     {name:"STOCKS_M",    dbKey:"STOCKS_M",     count:countMonthly(_SM),       last:lastMonthly(_SM)},
@@ -8016,7 +8018,7 @@ function App(){
     }
 
     setSnapResult(prev=>({...prev, pendingUpload:false, uploadLog, uploadErrors, uploadDone:true}));
-      doLoadCloud(); // v1.0 CGI — refresh DATA tab après snapshot
+      if(typeof window!=="undefined" && window.__cgiKvRefresh) window.__cgiKvRefresh();
   },[snapResult, txns, EFF]);
 
   // v23.19 — Snapshot unifié : dès qu'un snapshot est calculé (addSnap → pendingUpload),
@@ -8403,9 +8405,9 @@ function App(){
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
         {TABS.map((lb,i)=>(
-          <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2,background:"none",border:"none",cursor:"pointer",color:tab===i?C.btc:C.text3,transition:"color .15s"}}>
-            <span style={{fontSize:22}}>{ICONS[i]}</span>
-            <span style={{fontSize:11,fontWeight:700}}>{lb}</span>
+          <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.btc:C.text3,transition:"color .15s"}}>
+            <span style={{fontSize:20,lineHeight:1,display:"block"}}>{ICONS[i]}</span>
+            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{lb}</span>
           </button>
         ))}
       </div>
