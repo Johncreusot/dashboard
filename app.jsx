@@ -6529,6 +6529,201 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex}){
 // PAGE WATCHLIST v2 — CGI
 // Suivi de marché : thèses structurées + scoring + alertes + news
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI v4.0 — BIBLIOTHÈQUE DE CONDITIONS + MOTEUR TECHNIQUE (validation via Yahoo)
+// ══════════════════════════════════════════════════════════════════════════════
+var WL_CONDLIB_KEY = 'cgi_condition_library'; // biblio "personnalisée" (localStorage dédié, hors gros conteneur)
+
+// Unité de temps → interval Yahoo (4H = agrégé depuis le 1h)
+var COND_TF_UNITS = [["D","Daily"],["W","Weekly"],["M","Monthly"],["4H","4 heures"]];
+var COND_TF_INTERVAL = { "D":"1d", "W":"1wk", "M":"1mo", "4H":"1h" };
+// Range Yahoo suffisant pour MM200/RSI/MACD selon l'unité
+var COND_TF_RANGE = { "D":"2y", "W":"5y", "M":"max", "4H":"3mo" };
+var COND_MM_PERIODS = [9,20,50,200];
+
+// Templates techniques (kind:"price" → validables depuis les bougies)
+//   param: "mm" | "rsi" | "level" | "unit" | "none" | "manual"
+var COND_TECH_TEMPLATES = [
+  { id:"mm",         label:"Moyenne mobile", param:"mm"     },
+  { id:"rsi",        label:"RSI",            param:"rsi"    },
+  { id:"ath",        label:"ATH / plus haut",param:"unit"   },
+  { id:"support",    label:"Support",        param:"level"  },
+  { id:"resistance", label:"Résistance",     param:"level"  },
+  { id:"macd",       label:"MACD",           param:"unit"   },
+  { id:"volume",     label:"Volume (spike)", param:"unit"   },
+  { id:"divergence", label:"Divergence",     param:"manual" },
+];
+// Presets fondamentaux (kind:"news" → validables par l'IA depuis les news)
+var COND_FOND_PRESETS = [
+  "Earnings beat","Revenue growth","Guidance relevée","Catalyseur écosystème",
+  "Insider buying","Nouveau contrat / partenariat","Programme de rachat d'actions",
+  "Initiation analyste / objectif relevé","Lancement produit majeur",
+];
+
+// ── Maths indicateurs (fonctions pures) ──────────────────────────────────────
+function cgiSMA(vals, period){
+  if(!vals || vals.length<period) return null;
+  var s=0; for(var i=vals.length-period;i<vals.length;i++) s+=vals[i]; return s/period;
+}
+function cgiEMASeries(vals, period){
+  if(!vals || vals.length<period) return [];
+  var k=2/(period+1), out=[], e=vals[0]; out.push(e);
+  for(var i=1;i<vals.length;i++){ e=vals[i]*k+e*(1-k); out.push(e); }
+  return out;
+}
+function cgiRSI(closes, period){
+  period=period||14;
+  if(!closes || closes.length<period+1) return null;
+  var gains=0, losses=0;
+  for(var i=closes.length-period;i<closes.length;i++){
+    var d=closes[i]-closes[i-1]; if(d>=0) gains+=d; else losses-=d;
+  }
+  var avgG=gains/period, avgL=losses/period;
+  if(avgL===0) return 100;
+  var rs=avgG/avgL; return 100-(100/(1+rs));
+}
+function cgiMACD(closes){
+  if(!closes || closes.length<35) return null;
+  var e12=cgiEMASeries(closes,12), e26=cgiEMASeries(closes,26);
+  var n=Math.min(e12.length,e26.length); if(n<2) return null;
+  var macdLine=[];
+  for(var i=0;i<n;i++){ macdLine.push(e12[e12.length-n+i]-e26[e26.length-n+i]); }
+  var sig=cgiEMASeries(macdLine,9); if(sig.length<2) return null;
+  var m=macdLine[macdLine.length-1], s=sig[sig.length-1];
+  var mP=macdLine[macdLine.length-2], sP=sig[sig.length-2];
+  return { macd:m, signal:s, crossUp:(mP<=sP && m>s), crossDown:(mP>=sP && m<s) };
+}
+// Agrège des bougies 1h en bougies 4h (best-effort)
+function cgiAgg4h(candles){
+  if(!candles || !candles.length) return [];
+  var out=[]; 
+  for(var i=0;i<candles.length;i+=4){
+    var grp=candles.slice(i,i+4); if(!grp.length) continue;
+    var o=grp[0].o, c=grp[grp.length-1].c, h=null, l=null, v=0;
+    grp.forEach(function(k){
+      if(k.h!=null) h=(h==null?k.h:Math.max(h,k.h));
+      if(k.l!=null) l=(l==null?k.l:Math.min(l,k.l));
+      if(k.v!=null) v+=k.v;
+    });
+    out.push({t:grp[grp.length-1].t,o:o,h:h,l:l,c:c,v:v});
+  }
+  return out;
+}
+
+// ── Génère le libellé d'une condition à partir de ses params ─────────────────
+function cgiCondText(c){
+  if(!c) return "";
+  if(c.cat==="technique" && c.templateId){
+    var p=c.params||{}, u=p.unit||"D";
+    if(c.templateId==="mm"){
+      return "MM"+(p.period||50)+" ("+u+") — prix "+(p.sens==="below"?"< ":"> ")+"MM";
+    }
+    if(c.templateId==="rsi"){
+      return "RSI ("+u+") "+(p.sens==="above"?"> ":"< ")+(p.seuil!=null?p.seuil:(p.sens==="above"?70:30));
+    }
+    if(c.templateId==="ath")       return "ATH / plus haut ("+u+")";
+    if(c.templateId==="support")    return "Support $"+(p.level!=null?p.level:"?")+" ("+u+")";
+    if(c.templateId==="resistance") return "Cassure résistance $"+(p.level!=null?p.level:"?")+" ("+u+")";
+    if(c.templateId==="macd")       return "MACD croisement haussier ("+u+")";
+    if(c.templateId==="volume")     return "Spike volume ("+u+")";
+    if(c.templateId==="divergence") return "Divergence ("+u+")";
+  }
+  return c.text||"";
+}
+
+// ── Évalue une condition technique contre les bougies fournies ───────────────
+// seriesByUnit : { "D":[candles], "W":[...], ... }   candle = {t,o,h,l,c,v}
+// retourne { ok:bool, detail:string } ou null si données insuffisantes (→ on ne touche pas)
+function cgiEvalTechnical(c, seriesByUnit){
+  if(!c || c.kind!=="price" || c.templateId==="divergence") return null;
+  var p=c.params||{}, u=p.unit||"D";
+  var candles=seriesByUnit[u];
+  if(!candles || candles.length<5) return null;
+  var closes=candles.map(function(k){return k.c;}).filter(function(v){return v!=null;});
+  var last=closes[closes.length-1];
+  if(last==null) return null;
+  var fmt=function(v){ return (Math.round(v*100)/100).toLocaleString("fr-FR"); };
+
+  if(c.templateId==="mm"){
+    var period=p.period||50;
+    var sma=cgiSMA(closes,period); if(sma==null) return null;
+    var above=last>sma;
+    var ok=(p.sens==="below")?!above:above;
+    return { ok:ok, detail:"Prix "+fmt(last)+" "+(above?">":"<")+" MM"+period+" "+fmt(sma)+" ("+u+")" };
+  }
+  if(c.templateId==="rsi"){
+    var rsi=cgiRSI(closes,p.period||14); if(rsi==null) return null;
+    var seuil=(p.seuil!=null)?p.seuil:(p.sens==="above"?70:30);
+    var ok=(p.sens==="above")?rsi>seuil:rsi<seuil;
+    return { ok:ok, detail:"RSI "+fmt(rsi)+" "+(p.sens==="above"?">":"<")+" "+seuil+" ("+u+")" };
+  }
+  if(c.templateId==="ath"){
+    var highs=candles.map(function(k){return k.h!=null?k.h:k.c;}).filter(function(v){return v!=null;});
+    var maxH=Math.max.apply(null,highs);
+    var pct=(maxH-last)/maxH*100;
+    var ok=last>=maxH*0.99; // à 1% du plus haut de la fenêtre
+    return { ok:ok, detail:"À "+fmt(pct)+"% du plus haut "+fmt(maxH)+" ("+u+")" };
+  }
+  if(c.templateId==="support"){
+    if(p.level==null) return null;
+    return { ok:last<=p.level, detail:"Prix "+fmt(last)+" vs support "+p.level+" ("+u+")" };
+  }
+  if(c.templateId==="resistance"){
+    if(p.level==null) return null;
+    return { ok:last>=p.level, detail:"Prix "+fmt(last)+" vs résistance "+p.level+" ("+u+")" };
+  }
+  if(c.templateId==="macd"){
+    var m=cgiMACD(closes); if(m==null) return null;
+    return { ok:m.crossUp, detail:(m.crossUp?"Croisement haussier":"Pas de croisement")+" MACD ("+u+")" };
+  }
+  if(c.templateId==="volume"){
+    var vols=candles.map(function(k){return k.v;}).filter(function(v){return v!=null;});
+    if(vols.length<21) return null;
+    var avg=cgiSMA(vols.slice(0,-1),20); if(!avg) return null;
+    var lastV=vols[vols.length-1];
+    var ratio=lastV/avg;
+    return { ok:ratio>=1.5, detail:"Volume x"+fmt(ratio)+" vs moyenne 20 ("+u+")" };
+  }
+  return null;
+}
+
+// ── Biblio perso : load/save (localStorage dédié) ────────────────────────────
+function cgiCondLibLoad(){
+  try{ var r=JSON.parse(localStorage.getItem(WL_CONDLIB_KEY)||'[]'); return Array.isArray(r)?r:[]; }
+  catch(e){ return []; }
+}
+function cgiCondLibSave(lib){
+  try{ localStorage.setItem(WL_CONDLIB_KEY,JSON.stringify(lib)); }
+  catch(e){ console.warn('[condlib] save failed:',e.message); }
+}
+function cgiCondLibAdd(lib, text, cat){
+  text=(text||"").trim(); if(!text) return lib;
+  var exists=lib.some(function(x){return (x.text||"").toLowerCase()===text.toLowerCase();});
+  if(exists) return lib;
+  return lib.concat([{text:text,cat:cat||"perso"}]);
+}
+
+// ── Migration : normalise une condition legacy vers le modèle v4.0 ───────────
+function cgiMigrateCond(c){
+  if(!c || typeof c!=="object") return c;
+  if(c.cat && c.kind) return c; // déjà v4
+  return {
+    id: c.id!=null ? c.id : Date.now()+Math.floor(Math.random()*1000),
+    text: c.text||"",
+    validated: !!c.validated,
+    autoValidated: !!c.autoValidated,
+    validatedBy: c.validatedBy||null,
+    cat: "perso",
+    kind: "news",
+    templateId: null,
+    params: null,
+  };
+}
+function cgiMigrateEntryConds(e){
+  if(!e || !Array.isArray(e.conditions)) return e;
+  return { ...e, conditions: e.conditions.map(cgiMigrateCond) };
+}
+
 function PageWatchlist({ EFF, hidden }){
   var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
   var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
@@ -6545,6 +6740,10 @@ function PageWatchlist({ EFF, hidden }){
   const[newsPanel,setNewsPanel]= useState(false);
   const[news,setNews]         = useState([]);
   const[newsLoading,setNewsLoading]=useState(false);
+  const[condLib,setCondLib]   = useState([]);    // v4.0 biblio "personnalisée"
+  const[techMsg,setTechMsg]   = useState("");     // v4.0 retour bouton Tech
+  const[techBusy,setTechBusy] = useState(false);
+  useEffect(function(){ setCondLib(cgiCondLibLoad()); },[]);
 
   // ── Chargement ─────────────────────────────────────────────────────────────
   // v3.02 — clé localStorage dédiée (hors cgi_v1 pour éviter quota exceeded)
@@ -6566,7 +6765,8 @@ function PageWatchlist({ EFF, hidden }){
       fontWeight:900,color:bg,userSelect:"none"
     }},sym);
   }
-  function wlLoad(){ try{ var r=JSON.parse(localStorage.getItem(WL_LS_KEY)||'[]'); return Array.isArray(r)?r:[]; }catch(e){return[];} }
+  function wlMigrate(arr){ return (Array.isArray(arr)?arr:[]).map(cgiMigrateEntryConds); } // v4.0
+  function wlLoad(){ try{ var r=JSON.parse(localStorage.getItem(WL_LS_KEY)||'[]'); return wlMigrate(r); }catch(e){return[];} }
   function wlSave(nl){ try{ localStorage.setItem(WL_LS_KEY,JSON.stringify(nl)); }catch(e){ console.warn('[wl] localStorage save failed:',e.message); } }
 
   useEffect(function(){
@@ -6575,11 +6775,11 @@ function PageWatchlist({ EFF, hidden }){
     if(stored.length){ setList(stored); return; }
     // 2. Fallback : essayer lsv9 (migration depuis ancienne version)
     var v9stored = lsv9Get('cgi_watchlist');
-    if(v9stored&&Array.isArray(v9stored)&&v9stored.length){ setList(v9stored); wlSave(v9stored); return; }
+    if(v9stored&&Array.isArray(v9stored)&&v9stored.length){ var m9=wlMigrate(v9stored); setList(m9); wlSave(m9); return; }
     // 3. Fallback : KV
     fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.cgi_watchlist&&Array.isArray(d.cgi_watchlist)&&d.cgi_watchlist.length){ setList(d.cgi_watchlist); wlSave(d.cgi_watchlist); }})
+      .then(function(d){if(d.cgi_watchlist&&Array.isArray(d.cgi_watchlist)&&d.cgi_watchlist.length){ var mk=wlMigrate(d.cgi_watchlist); setList(mk); wlSave(mk); }})
       .catch(function(){});
   },[]);
 
@@ -6649,11 +6849,13 @@ function PageWatchlist({ EFF, hidden }){
 
   // ── Analyse IA : une news valide-t-elle des conditions ? ─────────────────
   async function analyzeNewsConditions(ticker, newsItems, conditions){
-    var conds=conditions.filter(function(c){return c.text&&c.text.trim();});
+    // v4.0 : seules les conditions "news" (fondamentales/perso) passent à l'IA — les techniques sont validées via Yahoo
+    var conds=conditions.filter(function(c){return c.text&&c.text.trim()&&c.kind!=="price";});
     if(!conds.length||!newsItems.length) return {};
     var newsLetters="ABCDEFGHIJ";
     var newsLines=newsItems.map(function(n,i){return "["+newsLetters[i]+"] "+n.title;}).join("\n");
-    var condLines=conds.map(function(c,i){return (i+1)+". "+c.text;}).join("\n");
+    var catLabel={technique:"[Technique]",fondamentale:"[Fondamentale]",perso:"[Perso]"};
+    var condLines=conds.map(function(c,i){return (i+1)+". "+(catLabel[c.cat]||"")+" "+c.text;}).join("\n");
     var prompt="Tu es un analyste financier expert. Ticker: "+ticker+"\n\n"+
       "Conditions d'investissement à valider:\n"+condLines+"\n\n"+
       "News récentes:\n"+newsLines+"\n\n"+
@@ -6781,18 +6983,18 @@ function PageWatchlist({ EFF, hidden }){
   }
 
   // ── Modal ─────────────────────────────────────────────────────────────────
+  function blankConds(n){ var a=[]; for(var i=0;i<n;i++) a.push(cgiMigrateCond({})); return a; }
   function openAdd(){
     setEditForm({ticker:"",name:"",cat:"Picking",fav:false,description:"",domain:"Tech",
       buyZoneLow:"",buyZoneHigh:"",alertBuy:"",alertSell:"",
       sellTargets:[{price:"",note:""}],
-      conditions:[{id:1,text:"",validated:false},{id:2,text:"",validated:false},{id:3,text:"",validated:false}],
+      conditions:blankConds(3),
       risks:""});
     setModal("add");
   }
   function openEdit(e){
     var st=(e.sellTargets&&e.sellTargets.length)?e.sellTargets:[{price:"",note:""}];
-    var conds=(e.conditions&&e.conditions.length)?e.conditions:
-      [{id:1,text:"",validated:false},{id:2,text:"",validated:false},{id:3,text:"",validated:false}];
+    var conds=(e.conditions&&e.conditions.length)?e.conditions.map(cgiMigrateCond):blankConds(3);
     setEditForm({...e,
       buyZoneLow:(e.buyZone&&e.buyZone.low)||"",buyZoneHigh:(e.buyZone&&e.buyZone.high)||"",
       sellTargets:st,conditions:conds});
@@ -6800,23 +7002,100 @@ function PageWatchlist({ EFF, hidden }){
   }
   function closeModal(){setModal(null);setEditForm({});}
 
-  function updateCond(idx,field,val){
+  // v4.0 — patch d'une condition + recalcul kind/libellé
+  function updateCondField(idx,patch){
     setEditForm(function(p){
       var conds=[...(p.conditions||[])];
-      conds[idx]={...conds[idx],[field]:val};
-      return{...p,conditions:conds};
+      var c={...conds[idx],...patch};
+      if(patch.params) c.params={...(conds[idx].params||{}),...patch.params};
+      c.kind=(c.cat==="technique" && c.templateId) ? "price" : "news";
+      if(c.cat==="technique" && c.templateId) c.text=cgiCondText(c);
+      conds[idx]=c;
+      return {...p,conditions:conds};
     });
   }
+  function setCondCat(idx,cat){
+    setEditForm(function(p){
+      var conds=[...(p.conditions||[])];
+      var c={...conds[idx],cat:cat};
+      if(cat==="technique"){ c.templateId="mm"; c.params={period:50,unit:"D",sens:"above"}; c.kind="price"; c.text=cgiCondText(c); }
+      else { c.templateId=null; c.params=null; c.kind="news"; }
+      conds[idx]=c;
+      return {...p,conditions:conds};
+    });
+  }
+  function setCondTemplate(idx,tid){
+    var defaults={ mm:{period:50,unit:"D",sens:"above"}, rsi:{unit:"D",seuil:30,sens:"below"},
+      ath:{unit:"D"}, support:{unit:"D",level:""}, resistance:{unit:"D",level:""},
+      macd:{unit:"D"}, volume:{unit:"D"}, divergence:{unit:"D"} };
+    setEditForm(function(p){
+      var conds=[...(p.conditions||[])];
+      var c={...conds[idx],templateId:tid,params:{...(defaults[tid]||{unit:"D"})}};
+      c.kind="price"; c.text=cgiCondText(c);
+      conds[idx]=c;
+      return {...p,conditions:conds};
+    });
+  }
+  function setCondText(idx,txt){ updateCondField(idx,{text:txt}); }
+  function updateCond(idx,field,val){ updateCondField(idx,{[field]:val}); }
   function addCond(){
     setEditForm(function(p){
       var conds=[...(p.conditions||[])];
-      if(conds.length>=5) return p;
-      conds.push({id:Date.now(),text:"",validated:false});
+      if(conds.length>=6) return p;
+      conds.push(cgiMigrateCond({}));
       return{...p,conditions:conds};
     });
   }
   function removeCond(idx){
     setEditForm(function(p){var c=[...(p.conditions||[])];c.splice(idx,1);return{...p,conditions:c};});
+  }
+
+  // ── v4.0 — Validation technique via bougies Yahoo ──────────────────────────
+  async function fetchCandlesUnit(symbol, unit){
+    var interval=COND_TF_INTERVAL[unit]||"1d";
+    var range=COND_TF_RANGE[unit]||"2y";
+    try{
+      var r=await fetch(CF_WORKER_URL+"/yahoo-chart?symbol="+encodeURIComponent(symbol)+"&interval="+interval+"&range="+range+"&no_logo=1",
+        {headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(15000)});
+      var d=await r.json();
+      var candles=Array.isArray(d.candles)?d.candles:[];
+      if(unit==="4H") candles=cgiAgg4h(candles);
+      return candles;
+    }catch(e){ return []; }
+  }
+  async function verifyTechnicalEntry(entry){
+    var techConds=(entry.conditions||[]).filter(function(c){return c.kind==="price"&&c.templateId&&c.templateId!=="divergence";});
+    if(!techConds.length) return {entry:entry,checked:0,validated:0};
+    var units=[...new Set(techConds.map(function(c){return (c.params&&c.params.unit)||"D";}))];
+    var sym=YF_MAP[entry.ticker]||entry.ticker;
+    var seriesByUnit={};
+    await Promise.all(units.map(async function(u){ seriesByUnit[u]=await fetchCandlesUnit(sym,u); }));
+    var validated=0, checked=0;
+    var newConds=(entry.conditions||[]).map(function(c){
+      if(c.kind!=="price"||!c.templateId||c.templateId==="divergence") return c;
+      var res=cgiEvalTechnical(c,seriesByUnit);
+      if(res==null) return c;
+      checked++;
+      if(res.ok){ validated++; return {...c,validated:true,autoValidated:true,validatedBy:{type:"technique",detail:res.detail,time:Date.now()}}; }
+      if(c.autoValidated && c.validatedBy && c.validatedBy.type==="technique"){ return {...c,validated:false,autoValidated:false,validatedBy:null}; }
+      return c;
+    });
+    return {entry:{...entry,conditions:newConds,score:newConds.filter(function(c){return c.validated;}).length},checked:checked,validated:validated};
+  }
+  async function verifyTechnicalAll(){
+    var targets=list.filter(function(e){return (e.conditions||[]).some(function(c){return c.kind==="price"&&c.templateId&&c.templateId!=="divergence";});});
+    if(!targets.length){ setTechMsg("Aucune condition technique à vérifier."); setTimeout(function(){setTechMsg("");},3000); return; }
+    setTechBusy(true); setTechMsg("📈 Analyse technique en cours…");
+    var totV=0, totC=0, updated=[...list];
+    for(var i=0;i<targets.length;i++){
+      var r=await verifyTechnicalEntry(targets[i]);
+      totV+=r.validated; totC+=r.checked;
+      updated=updated.map(function(x){return x.id===r.entry.id?r.entry:x;});
+    }
+    persist(updated);
+    setTechBusy(false);
+    setTechMsg("✓ "+totV+"/"+totC+" condition(s) technique(s) validée(s)");
+    setTimeout(function(){setTechMsg("");},5000);
   }
   function updateSell(idx,field,val){
     setEditForm(function(p){
@@ -6837,6 +7116,10 @@ function PageWatchlist({ EFF, hidden }){
   function submitForm(){
     if(!editForm.ticker||!editForm.ticker.trim()) return;
     var conds=(editForm.conditions||[]).filter(function(c){return c.text&&c.text.trim();});
+    // v4.0 — alimente la biblio "personnalisée" avec les conditions libres
+    var lib=condLib;
+    conds.forEach(function(c){ if(c.cat==="perso"&&c.text){ lib=cgiCondLibAdd(lib,c.text,"perso"); } });
+    if(lib!==condLib){ setCondLib(lib); cgiCondLibSave(lib); }
     var sells=(editForm.sellTargets||[]).filter(function(s){return s.price;}).map(function(s){return{price:parseFloat(s.price),note:s.note||""};});
     var entry={
       id:modal==="edit"?editForm.id:("wl_"+Date.now()),
@@ -6879,6 +7162,75 @@ function PageWatchlist({ EFF, hidden }){
   var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
   var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
 
+  // ── v4.0 — carte condition structurée (catégorie → template paramétré / preset / libre) ──
+  function optEl(v,l){ return React.createElement("option",{key:String(v),value:v},l); }
+  function unitSelect(c,i){
+    return React.createElement("select",{key:"u",value:(c.params&&c.params.unit)||"D",
+      onChange:function(ev){updateCondField(i,{params:{unit:ev.target.value}});},
+      style:{...inputStyle,flex:"0 0 78px",padding:"6px 8px"}},
+      COND_TF_UNITS.map(function(u){return optEl(u[0],u[0]);}));
+  }
+  function numField(c,i,key,ph,width){
+    return React.createElement("input",{key:key,type:"number",placeholder:ph,
+      value:(c.params&&c.params[key]!=null)?c.params[key]:"",
+      onChange:function(ev){var v=ev.target.value; updateCondField(i,{params:{[key]:(v===""?null:parseFloat(v))}});},
+      style:{...inputStyle,flex:"0 0 "+(width||80)+"px",padding:"6px 8px"}});
+  }
+  function techParams(c,i){
+    var t=c.templateId||"mm", p=c.params||{};
+    if(t==="mm") return [
+      React.createElement("select",{key:"per",value:p.period||50,onChange:function(ev){updateCondField(i,{params:{period:parseInt(ev.target.value,10)}});},style:{...inputStyle,flex:"0 0 78px",padding:"6px 8px"}},
+        COND_MM_PERIODS.map(function(n){return optEl(n,"MM"+n);})),
+      unitSelect(c,i),
+      React.createElement("select",{key:"sens",value:p.sens||"above",onChange:function(ev){updateCondField(i,{params:{sens:ev.target.value}});},style:{...inputStyle,flex:1,minWidth:120,padding:"6px 8px"}},
+        optEl("above","prix > MM"),optEl("below","prix < MM"))
+    ];
+    if(t==="rsi") return [
+      unitSelect(c,i),
+      React.createElement("select",{key:"sens",value:p.sens||"below",onChange:function(ev){updateCondField(i,{params:{sens:ev.target.value}});},style:{...inputStyle,flex:"0 0 130px",padding:"6px 8px"}},
+        optEl("below","survente <"),optEl("above","surachat >")),
+      numField(c,i,"seuil","seuil (30)",72)
+    ];
+    if(t==="support"||t==="resistance") return [ numField(c,i,"level","niveau $",90), unitSelect(c,i) ];
+    if(t==="ath"||t==="macd"||t==="volume") return [ unitSelect(c,i) ];
+    if(t==="divergence") return [ unitSelect(c,i), React.createElement("span",{key:"man",style:{fontSize:10,color:grayC,fontStyle:"italic"}},"(coche manuelle)") ];
+    return [ unitSelect(c,i) ];
+  }
+  function CondCard(c,i){
+    var cat=c.cat||"perso";
+    var line2;
+    if(cat==="technique"){
+      line2=React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}},
+        React.createElement("select",{value:c.templateId||"mm",onChange:function(ev){setCondTemplate(i,ev.target.value);},style:{...inputStyle,flex:"0 0 120px",padding:"6px 8px"}},
+          COND_TECH_TEMPLATES.map(function(t){return optEl(t.id,t.label);})),
+        techParams(c,i)
+      );
+    } else if(cat==="fondamentale"){
+      line2=React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}},
+        React.createElement("select",{value:"",onChange:function(ev){if(ev.target.value)setCondText(i,ev.target.value);},style:{...inputStyle,flex:"0 0 130px",padding:"6px 8px"}},
+          [optEl("","＋ preset")].concat(COND_FOND_PRESETS.map(function(p){return optEl(p,p);}))),
+        React.createElement("input",{value:c.text||"",placeholder:"…ou saisie libre",onChange:function(ev){setCondText(i,ev.target.value);},style:{...inputStyle,flex:1,minWidth:140}})
+      );
+    } else {
+      line2=React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6,alignItems:"center"}},
+        (condLib&&condLib.length>0)&&React.createElement("select",{value:"",onChange:function(ev){if(ev.target.value)setCondText(i,ev.target.value);},style:{...inputStyle,flex:"0 0 120px",padding:"6px 8px"}},
+          [optEl("","↻ déjà utilisées")].concat(condLib.map(function(x,xi){return React.createElement("option",{key:xi,value:x.text},x.text);}))),
+        React.createElement("input",{value:c.text||"",placeholder:"Condition libre…",onChange:function(ev){setCondText(i,ev.target.value);},style:{...inputStyle,flex:1,minWidth:140}})
+      );
+    }
+    return React.createElement("div",{key:c.id||i,style:{border:"1px solid "+borderC,borderRadius:8,padding:8,display:"flex",flexDirection:"column",gap:6}},
+      React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+        React.createElement("input",{type:"checkbox",checked:!!c.validated,title:"Validé",onChange:function(ev){updateCond(i,"validated",ev.target.checked);},style:{flexShrink:0}}),
+        React.createElement("select",{value:cat,onChange:function(ev){setCondCat(i,ev.target.value);},style:{...inputStyle,flex:"0 0 138px",padding:"6px 8px"}},
+          optEl("technique","⚙️ Technique"),optEl("fondamentale","📊 Fondamentale"),optEl("perso","✎ Perso / libre")),
+        c.autoValidated&&React.createElement("span",{style:{fontSize:10,fontWeight:700}},c.validatedBy&&c.validatedBy.type==="technique"?"📈":"🤖"),
+        React.createElement("button",{onClick:function(){removeCond(i);},style:{marginLeft:"auto",background:"none",border:"none",color:redC,fontSize:16,cursor:"pointer",padding:"0 4px"}},"×")
+      ),
+      line2,
+      cat==="technique"&&React.createElement("div",{style:{fontSize:10,color:grayC,fontStyle:"italic"}},"→ "+(c.text||cgiCondText(c)))
+    );
+  }
+
   return React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
 
     // ── Header ──────────────────────────────────────────────────────────────
@@ -6889,10 +7241,14 @@ function PageWatchlist({ EFF, hidden }){
       ),
       React.createElement("div",{style:{display:"flex",gap:6}},
         React.createElement("button",{onClick:fetchNews,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},"📰 News"),
+        React.createElement("button",{onClick:verifyTechnicalAll,disabled:techBusy,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:techBusy?grayC:greenC,fontSize:11,fontWeight:700,cursor:"pointer"}},techBusy?"📈 ...":"📈 Tech"),
         React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:loading?grayC:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},loading?"⟳ ...":"⟳"),
         React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},"+")
       )
     ),
+
+    // ── Bandeau retour vérif technique (v4.0) ─────────────────────────────────
+    techMsg&&React.createElement("div",{style:{margin:"0 16px 8px",padding:"6px 10px",background:greenC+"12",border:"1px solid "+greenC+"44",borderRadius:8,fontSize:11,color:greenC,fontWeight:600}},techMsg),
 
     // ── Filtres ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
@@ -6967,17 +7323,28 @@ function PageWatchlist({ EFF, hidden }){
                         style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",
                           background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
                         React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
+                        React.createElement("span",{style:{fontSize:8,flexShrink:0,marginTop:3,padding:"0 4px",borderRadius:4,fontWeight:800,
+                          background:(c.cat==="technique"?blueC:c.cat==="fondamentale"?orangeC:grayC)+"22",
+                          color:c.cat==="technique"?blueC:c.cat==="fondamentale"?orangeC:grayC}},
+                          c.cat==="technique"?"T":c.cat==="fondamentale"?"F":"P"),
                         React.createElement("span",{style:{fontSize:11,color:c.validated?textC:grayC,lineHeight:1.4,flex:1}},c.text),
-                        c.autoValidated&&React.createElement("span",{style:{fontSize:9,color:greenC,flexShrink:0,marginTop:2,fontWeight:700}},"🤖")
+                        c.autoValidated&&React.createElement("span",{style:{fontSize:9,color:greenC,flexShrink:0,marginTop:2,fontWeight:700}},
+                          c.validatedBy&&c.validatedBy.type==="technique"?"📈":"🤖")
                       ),
-                      c.autoValidated&&c.validatedBy&&React.createElement("a",{
+                      // Source news (lien) — validation par IA
+                      c.autoValidated&&c.validatedBy&&c.validatedBy.url&&React.createElement("a",{
                         href:c.validatedBy.url,target:"_blank",rel:"noopener",
                         onClick:function(ev){ev.stopPropagation();},
                         style:{display:"block",fontSize:9,color:blueC,padding:"2px 6px 3px 24px",
                           background:greenC+"08",borderTop:"1px solid "+greenC+"22",
                           textDecoration:"none",lineHeight:1.3,overflow:"hidden",
                           textOverflow:"ellipsis",whiteSpace:"nowrap"}
-                      },"↗ "+c.validatedBy.title)
+                      },"↗ "+c.validatedBy.title),
+                      // Détail technique (pas de lien) — validation via Yahoo
+                      c.autoValidated&&c.validatedBy&&!c.validatedBy.url&&c.validatedBy.detail&&React.createElement("div",{
+                        style:{fontSize:9,color:greenC,padding:"2px 6px 3px 24px",
+                          background:greenC+"08",borderTop:"1px solid "+greenC+"22",lineHeight:1.3}
+                      },"📈 "+c.validatedBy.detail)
                     );
                   })
                 )
@@ -7118,17 +7485,11 @@ function PageWatchlist({ EFF, hidden }){
 
         // Section: Catalyseurs
         React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"CATALYSEURS / CONDITIONS (scoring)"),
-        React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:8}},"Coche les conditions validées → le ticker monte dans la liste"),
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:8}},
-          (editForm.conditions||[]).map(function(c,i){
-            return React.createElement("div",{key:c.id||i,style:{display:"flex",gap:8,alignItems:"center"}},
-              React.createElement("input",{type:"checkbox",checked:!!c.validated,onChange:function(ev){updateCond(i,"validated",ev.target.checked);},style:{flexShrink:0}}),
-              React.createElement("input",{value:c.text||"",placeholder:"Ex: Croisement moyennes mobiles, RSI survendu...",onChange:function(ev){updateCond(i,"text",ev.target.value);},style:{...inputStyle,flex:1}}),
-              React.createElement("button",{onClick:function(){removeCond(i);},style:{background:"none",border:"none",color:redC,fontSize:14,cursor:"pointer",padding:"0 4px"}},"×")
-            );
-          })
+        React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:8}},"Technique = validé via le bouton 📈 Tech · Fondamentale/Perso = validé par l'IA news 🤖 ou à la main"),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:8}},
+          (editForm.conditions||[]).map(CondCard)
         ),
-        (editForm.conditions||[]).length<5&&React.createElement("button",{onClick:addCond,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"4px 12px",color:blueC,fontSize:11,cursor:"pointer",marginBottom:16}},
+        (editForm.conditions||[]).length<6&&React.createElement("button",{onClick:addCond,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"4px 12px",color:blueC,fontSize:11,cursor:"pointer",marginBottom:16}},
           "+ Ajouter un catalyseur"),
 
         // Section: Risques
