@@ -184,7 +184,7 @@ const GDBS_2026=[{"d":"Mai-31","s":100.0614,"sp":100,"nq":100}];
 
 const CURRENT={"date":"2026-05-31","totalUSD":142170,"totalEUR":130796,"usdEur":0.92,"eurUsd":1.086957,"btcPrice":43588.99,"gdbC":99.9847,"gdbS":100.0614,"crypto":{"date":"2026-05-31","total":104784,"items":[{"t":"BTC","qty":2.14325481,"pa":43588.99,"live":43588.99,"val":93422,"pnl":0,"pct":0},{"t":"ETH","qty":5.5,"pa":2065.81,"live":2065.81,"val":11362,"pnl":0,"pct":0}]},"stocks":{"date":"2026-05-31","total":28694,"items":[{"t":"NVDA","cat":"Picking","qty":12.0,"pa":179.92,"live":179.92,"val":2159,"pnl":0,"pct":0},{"t":"IWDA","cat":"Indices","qty":20.0,"pa":133.0571,"live":133.0571,"val":2661,"pnl":0,"pct":0},{"t":"APH","cat":"Picking","qty":26.0,"pa":131.41,"live":131.41,"val":3417,"pnl":0,"pct":0},{"t":"ANET","cat":"Picking","qty":20.0,"pa":146.25,"live":146.25,"val":2925,"pnl":0,"pct":0},{"t":"AXON","cat":"Picking","qty":12.5,"pa":386.94,"live":386.94,"val":4837,"pnl":0,"pct":0},{"t":"PLTR","cat":"Picking","qty":50.0,"pa":136.3,"live":136.3,"val":6815,"pnl":0,"pct":0},{"t":"USD","cat":"Cash","qty":5880,"pa":1.0,"live":1.0,"val":5880,"pnl":0,"pct":0},{"t":"KUCOIN","cat":"Cash","qty":0,"pa":1.0,"live":1.0,"val":0,"pnl":0,"pct":0}]},"bank":{"date":"2026-05-31","totalEUR":7997,"breakdown":{"LCL":7159,"BCI":838,"DeBlock":0}},"portfolio":{"date":"2026-05-31","items":[{"t":"BTC","qty":2.14325481,"pa":43588.99,"live":43588.99,"val":93422,"pnl":0,"pct":0,"cat":"Crypto","valEUR":85948},{"t":"ETH","qty":5.5,"pa":2065.81,"live":2065.81,"val":11362,"pnl":0,"pct":0,"cat":"Crypto","valEUR":10453},{"t":"NVDA","cat":"Picking","qty":12.0,"pa":179.92,"live":179.92,"val":2159,"pnl":0,"pct":0,"valEUR":1986},{"t":"IWDA","cat":"Indices","qty":20.0,"pa":133.0571,"live":133.0571,"val":2661,"pnl":0,"pct":0,"valEUR":2448},{"t":"APH","cat":"Picking","qty":26.0,"pa":131.41,"live":131.41,"val":3417,"pnl":0,"pct":0,"valEUR":3144},{"t":"ANET","cat":"Picking","qty":20.0,"pa":146.25,"live":146.25,"val":2925,"pnl":0,"pct":0,"valEUR":2691},{"t":"AXON","cat":"Picking","qty":12.5,"pa":386.94,"live":386.94,"val":4837,"pnl":0,"pct":0,"valEUR":4450},{"t":"PLTR","cat":"Picking","qty":50.0,"pa":136.3,"live":136.3,"val":6815,"pnl":0,"pct":0,"valEUR":6270},{"t":"LCL","cat":"Cash Matelas","qty":7159,"pa":1.0,"live":1.086957,"val":7782,"pnl":0,"pct":0.0,"valEUR":7159},{"t":"BCI","cat":"Cash Matelas","qty":838,"pa":1.0,"live":1.086957,"val":911,"pnl":0,"pct":0.0,"valEUR":838},{"t":"DeBlock","cat":"Cash Matelas","qty":0,"pa":1.0,"live":1.086957,"val":0,"pnl":0,"pct":0.0,"valEUR":0},{"t":"USD","cat":"Cash","qty":5880,"pa":1.0,"live":1.0,"val":5880,"pnl":0,"pct":0,"valEUR":5410},{"t":"KUCOIN","cat":"Cash","qty":0,"pa":1.0,"live":1.0,"val":0,"pnl":0,"pct":0,"valEUR":0}]},"alloc":[{"n":"Crypto","pct":73.7,"tgt":74,"c":"#F7931A"},{"n":"Picking","pct":14.2,"tgt":14,"c":"#7B68EE"},{"n":"Cash Matelas","pct":6.1,"tgt":6,"c":"#6B7280"},{"n":"Cash Dip","pct":4.1,"tgt":4,"c":"#22C55E"},{"n":"Indices","pct":1.9,"tgt":2,"c":"#4A90D9"}]};
 
-const MONTHS={"2022":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[-0.0376,-0.004,0.062,-0.0021,-0.0117,-0.0725,0.0762,0.028,-0.0685,0.0512,-0.0927,0.0121],"pnl":[-2800,-288,4425,-156,-883,-5418,5282,2090,-5254,3660,-6962,824],"ttl":-5480},"2023":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.1693,-0.0487,0.1241,0.0551,-0.061,0.0341,-0.0403,0.0272,-0.0285,0.1389,0.0363,0.0878],"pnl":[11678,-3926,9525,4749,-5549,2913,-3559,2307,-2485,11759,3495,8772],"ttl":39679},"2024":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.025,0.2988,0.0739,-0.0823,0.1802,-0.0817,0.0867,-0.145,0.103,0.1005,0.3449,-0.0565],"pnl":[2721,33283,10691,-12781,25686,-13752,13392,-24354,14787,15907,60088,-13247],"ttl":112421},"2025":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.0856,-0.2298,-0.0387,0.0835,0.164,-0.0763,0.163,-0.0471,0.0186,0.0355,-0.1699,-0.0477],"pnl":[18936,-55156,-7153,14838,31576,-17094,33739,-11350,4271,8293,-41109,-9584],"ttl":-29793},"2026":{"m":["JAN","FEV","MAR"],"pct":[0.0668,-0.2257,0.1327],"pnl":[12783,-46050,20962],"ttl":-12305}};
+const MONTHS={"2022":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[-0.0376,-0.004,0.062,-0.0021,-0.0117,-0.0725,0.0762,0.028,-0.0685,0.0512,-0.0927,0.0121],"pnl":[-2800,-288,4425,-156,-883,-5418,5282,2090,-5254,3660,-6962,824],"ttl":-5480,"inv":[0,0,0,0,0,0,0,0,0,0,0,0]},"2023":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.1693,-0.0487,0.1241,0.0551,-0.061,0.0341,-0.0403,0.0272,-0.0285,0.1389,0.0363,0.0878],"pnl":[11678,-3926,9525,4749,-5549,2913,-3559,2307,-2485,11759,3495,8772],"ttl":39679,"inv":[0,0,0,0,0,0,0,0,0,0,0,0]},"2024":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.025,0.2988,0.0739,-0.0823,0.1802,-0.0817,0.0867,-0.145,0.103,0.1005,0.3449,-0.0565],"pnl":[2721,33283,10691,-12781,25686,-13752,13392,-24354,14787,15907,60088,-13247],"ttl":112421,"inv":[0,0,0,0,0,0,0,0,0,0,0,0]},"2025":{"m":["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],"pct":[0.0856,-0.2298,-0.0387,0.0835,0.164,-0.0763,0.163,-0.0471,0.0186,0.0355,-0.1699,-0.0477],"pnl":[18936,-55156,-7153,14838,31576,-17094,33739,-11350,4271,8293,-41109,-9584],"ttl":-29793,"inv":[2069,0,6316,2179,3315,24,-21,-134,-447,4886,385,-3774]},"2026":{"m":["JAN","FEV","MAR"],"pct":[0.0668,-0.2257,0.1327],"pnl":[12783,-46050,20962],"ttl":-12305,"inv":[6607,29,-548]}};
 const SEAS={m:["JAN","FEV","MAR","AVR","MAI","JUI","JUL","AOU","SEP","OCT","NOV","DEC"],pct:[.0757,.0386,.1144,.0094,-.1009,-.1178,.1593,.0002,.0370,.1506,.1247,-.0357]};
 // v26.00 Lot B — donnees reelles (spot+IBKR fusionnes, futures, annexe IBKR).
 
@@ -997,12 +997,12 @@ async function save(k, v){
    DD:        [date, wallet_crypto€, total_hors_immo€, BTC$, CGIS$]
               col AO "TOTAL € hors immo" utilisée pour le total
    DB:        [date, CREUSOT GLOBAL INVESTMENTS, BTC, SP500, Nasdaq, ETH] base100=Jan2023
-   GDBS:      [date, GDB.S actual$, CGIC actual$]  daily from jan 2026
+   GDBS:      [date, CGIS actual$, CGIC actual$]  daily from jan 2026
    PORT_B100: [date, portfolio_hors_immo_base100]  base=Jan2026=€313 653
 ─────────────────────────────────────────────────────── */
 
 
-// GDB.S and GDB.C daily actual prices [date, gs$, gc$] — from Jan 2026
+// CGIS et CGIC — cours journaliers [date, cgis$, cgic$]
 
 // GDB.C actual price depuis Jan 2023 [date, gc$]
 
@@ -4745,13 +4745,13 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
 /* ═══════════════════════════════════════════════════════════
    PAGE GDB  v10
    1. Récapitulatif CGIC + CGIS (nb parts, valeur fonds, cours, perfs)
-   2. Graphique comparaison benchmarks (GDB.S en rouge)
+   2. Graphique comparaison benchmarks (CGIS en rouge)
    3. Benchmark YTD corrigé
-   4. Graphique GDB.C cours + Graphique GDB.S cours
+   4. Graphique CGIC cours + Graphique CGIS cours
 ═══════════════════════════════════════════════════════════ */
 /* ── FondCard: récapitulatif d'un fonds ── */
 function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, perfAllTime, onClick}){
-  // label format: "GDB.C — CRYPTO" or "GDB.S — ACTIONS"
+  // label format: "CGIC — Crypto" or "CGIS — Actions"
   const [titre, sousTitre] = label.split(" — ");
   // perfAllTime passé depuis PageGDB (corrigé €/$), fallback sur calcul local en €
   const perfCreation = perfAllTime != null ? perfAllTime : (eur ? (cours*(usdEur||0.852))/10-1 : cours/10-1);
@@ -5074,10 +5074,10 @@ function PageGDB(
   return(
     <div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
-        <FondCard label="GDB.C — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
+        <FondCard label="CGIC — Crypto" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime} onClick={()=>setDetailFond("CGIC")}
           perfs={[["1J",gcPerf(d1)],["1S",gcPerf(d7)],["1M",gcPerf(d30)],["YTD",gcPerf(dytd)],["ALL",gcPerfAllTime]]}/>
-        <FondCard label="GDB.S — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
+        <FondCard label="CGIS — Actions" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gsPerfAllTime} onClick={()=>setDetailFond("CGIS")}
           perfs={[["1J",gsPerf(d1)],["1S",gsPerf(d7)],["1M",gsPerf(d30)],["YTD",gsYTD],["1Y*",gsYTD]]}/>
       </div>
@@ -5885,7 +5885,7 @@ function SnapshotModal({onSave, onClose, EFF}){
       pct_stable:   pctStable,
       pct_banque:   pctBanque,
       pct_immo:     pctImmo,
-      // Col P-R (GDB.S)
+      // Col P-R (CGIS)
       nb_actions_gdbs: CURRENT.gdbS ? Math.round(CURRENT.totalUSD / CURRENT.gdbS) : 0,
       cours_gdbs_usd: gdbsUSD,
       var_gdbs:     0,
@@ -6165,9 +6165,9 @@ function CloudKeyList({data, onRefresh}){
     {key:"cgi_snapshots", label:"Snapshots journaliers (objets)"},
     {key:"cgi_txns",      label:"Transactions"},
     {key:"cgi_dd",        label:"DD (historique quotidien)"},
-    {key:"cgi_gdbs",      label:"GDBS (CGIC et CGIS)"},
-    {key:"cgi_gc",        label:"GC_FULL (GDB.C historique)"},
-    {key:"cgi_gsb",       label:"GS_B100_EXT"},
+    {key:"cgi_gdbs",      label:"CGIS/CGIC · Cours journaliers"},
+    {key:"cgi_gc",        label:"CGIC · Historique cours"},
+    {key:"cgi_gsb",       label:"CGIS · Base 100 (jan 2026)"},
     {key:"cgi_cm",        label:"CRYPTO_MONTHLY"},
     {key:"cgi_sm",        label:"STOCKS_MONTHLY"},
     {key:"cgi_tm",        label:"TOTAL_MONTHLY"},
@@ -6681,22 +6681,22 @@ function PageData(
       headers:["Date","Crypto EUR","Total EUR","BTC $","CGIS $","usdEur"],
       rows: _DD.slice().reverse().map(function(r){return[r[0],fmt(r[1]),fmt(r[2]),fmt(r[3]),fmtF(r[4],4),fmtF(r[5],6)];}),
     },
-    "GDBS": {
-      label:"GDBS — Cours CGIC et GDB.S",
-      desc:"Cours journaliers depuis aout 2025 ("+_GDBS.length+" points)",
+    "CGIS_CGIC": {
+      label:"CGIS/CGIC · Cours journaliers",
+      desc:"Cours CGIS et CGIC depuis jan 2026 ("+_GDBS.length+" points)",
       headers:["Date","CGIS $","CGIC $"],
       rows: _GDBS.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4),fmtF(r[2],4)];}),
     },
     "GC_FULL": {
-      label:"GC_FULL — Historique GDB.C",
-      desc:"Cours GDB.C depuis 2020 ("+_GC.length+" points)",
-      headers:["Date","GDB.C $"],
+      label:"CGIC · Historique cours",
+      desc:"Cours CGIC depuis 2020 ("+_GC.length+" points)",
+      headers:["Date","CGIC $"],
       rows: _GC.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4)];}),
     },
     "GS_B100": {
-      label:"GS_B100 — GDB.S base 100",
-      desc:"GDB.S rebase 100 au 1er jan 2026 ("+_GSB.length+" points)",
-      headers:["Date","GDB.S base100"],
+      label:"CGIS · Base 100",
+      desc:"CGIS base 100 depuis jan 2026 ("+_GSB.length+" points)",
+      headers:["Date","CGIS base100"],
       rows: _GSB.slice().reverse().map(function(r){return[r[0],fmtF(r[1],3)];}),
     },
     "BENCH_IDX": {
@@ -6832,7 +6832,7 @@ function PageData(
   var LOCAL_SUMMARY = [
     // Séries temporelles
     {name:"DD",          dbKey:"DD",          count:_DD.length,              last:getLast(_DD)},
-    {name:"GDBS",        dbKey:"GDBS",         count:_GDBS.length,            last:getLast(_GDBS)},
+    {name:"CGIS/CGIC",   dbKey:"CGIS_CGIC",    count:_GDBS.length,            last:getLast(_GDBS)},
     {name:"GC_FULL",     dbKey:"GC_FULL",      count:_GC.length,              last:getLast(_GC)},
     {name:"GS_B100_EXT", dbKey:"GS_B100",      count:_GSB.length,             last:getLast(_GSB)},
     {name:"BENCH_IDX",   dbKey:"BENCH_IDX",    count:_BENCH.length,           last:getLast(_BENCH)},
@@ -8016,6 +8016,7 @@ function App(){
     }
 
     setSnapResult(prev=>({...prev, pendingUpload:false, uploadLog, uploadErrors, uploadDone:true}));
+      doLoadCloud(); // v1.0 CGI — refresh DATA tab après snapshot
   },[snapResult, txns, EFF]);
 
   // v23.19 — Snapshot unifié : dès qu'un snapshot est calculé (addSnap → pendingUpload),
@@ -8333,7 +8334,7 @@ function App(){
         {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:12,fontWeight:900,color:C.btc,letterSpacing:.2,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
+            <span style={{fontSize:10,fontWeight:900,color:C.btc,letterSpacing:.1,lineHeight:1.15,textAlign:"center"}}>CREUSOT<br/>GLOBAL INVESTMENTS</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
