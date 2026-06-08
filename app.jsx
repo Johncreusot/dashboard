@@ -8036,8 +8036,10 @@ async function cgiTelegramSend(text){
       body:JSON.stringify({text:text}),
       signal:AbortSignal.timeout(10000)
     });
-    return r.ok;
-  }catch(e){ return false; }
+    var d=null; try{ d=await r.json(); }catch(e){}
+    if(r.ok && d && d.ok) return {ok:true, error:null};
+    return {ok:false, error:(d&&d.error)||("HTTP "+r.status)};
+  }catch(e){ return {ok:false, error:"réseau: "+(e&&e.message||"timeout")}; }
 }
 
 // n = { type, emoji, title, body, dedupeKey?, telegram? }
@@ -8098,21 +8100,35 @@ function NotifBell(){
   function closePanel(){ setOpen(false); cgiNotifMarkAllRead(); }
 
   async function saveTg(){
-    if(!tgToken.trim()||!tgChat.trim()){ setTgMsg("Token et Chat ID requis."); return; }
+    var tk=tgToken.replace(/\s+/g,""); // retire tout espace parasite du token
+    if(!tk||!tgChat.trim()){ setTgMsg("Token et Chat ID requis."); return; }
     setTgMsg("Enregistrement…");
     try{
       var r=await fetch(CF_WORKER_URL+"/telegram-config",{
         method:"POST",headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-        body:JSON.stringify({token:tgToken.trim(),chatId:tgChat.trim()}),signal:AbortSignal.timeout(10000)});
+        body:JSON.stringify({token:tk,chatId:tgChat.trim()}),signal:AbortSignal.timeout(10000)});
       var d=await r.json();
       if(d.ok){ setTgMsg("✓ Enregistré dans le KV."); setTgToken(""); setTgStatus({configured:true,chatId:tgChat.trim()}); }
-      else setTgMsg("Erreur : "+(d.error||"inconnue"));
-    }catch(e){ setTgMsg("Erreur réseau."); }
+      else setTgMsg("Erreur : "+(d.error||("HTTP "+r.status)));
+    }catch(e){ setTgMsg("Erreur réseau (worker injoignable ?)."); }
   }
   async function testTg(){
     setTgMsg("Envoi du test…");
-    var ok=await cgiTelegramSend("✅ Test CGI — les notifications Telegram fonctionnent.");
-    setTgMsg(ok?"✓ Message de test envoyé.":"Échec : vérifie la config / le redéploiement du worker.");
+    // Si un token est saisi, on l'enregistre d'abord (Tester lit le KV, pas le formulaire)
+    var tk=tgToken.replace(/\s+/g,"");
+    if(tk){
+      if(!tgChat.trim()){ setTgMsg("Chat ID requis."); return; }
+      try{
+        var rc=await fetch(CF_WORKER_URL+"/telegram-config",{
+          method:"POST",headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+          body:JSON.stringify({token:tk,chatId:tgChat.trim()}),signal:AbortSignal.timeout(10000)});
+        var dc=await rc.json();
+        if(!dc.ok){ setTgMsg("Config non enregistrée : "+(dc.error||("HTTP "+rc.status))); return; }
+        setTgStatus({configured:true,chatId:tgChat.trim()}); setTgToken("");
+      }catch(e){ setTgMsg("Erreur réseau (config) — worker redéployé ?"); return; }
+    }
+    var res=await cgiTelegramSend("Test CGI — notifications Telegram operationnelles.");
+    setTgMsg(res.ok ? "✓ Message de test envoyé." : ("Échec : "+(res.error||"inconnu")));
   }
 
   var inp={width:"100%",background:C2.bg||"#07080D",border:"1px solid "+border,borderRadius:8,padding:"8px 10px",color:text,fontSize:13,boxSizing:"border-box"};
