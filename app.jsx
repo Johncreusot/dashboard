@@ -6791,7 +6791,7 @@ function PageWatchlist({ EFF, hidden }){
       var sym=YF_MAP[e.ticker]||e.ticker;
       return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
     })).then(function(res){
-      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); setLoading(false);
+      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); checkPriceAlerts(pm); setLoading(false);
     });
   },[list.length]);
 
@@ -6810,11 +6810,28 @@ function PageWatchlist({ EFF, hidden }){
       var sym=YF_MAP[e.ticker]||e.ticker;
       return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
     })).then(function(res){
-      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); setLoading(false);
+      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); checkPriceAlerts(pm); setLoading(false);
     });
   }
 
   // ── Score ─────────────────────────────────────────────────────────────────
+  // v4.0 P2 — alertes de prix → notifications (dédupliquées par jour)
+  function checkPriceAlerts(pm){
+    var today=new Date().toISOString().slice(0,10);
+    list.forEach(function(e){
+      var p=pm[e.ticker]; if(p==null) return;
+      var fmtp="$"+p.toLocaleString("fr-FR",{maximumFractionDigits:2});
+      var ab=(e.alertBuy!=null)?e.alertBuy:((e.alertBelow!=null)?e.alertBelow:null);
+      if(ab!=null && p<=ab){
+        cgiNotifPush({type:"alert",emoji:"🔻",dedupeKey:"alertbuy_"+e.ticker+"_"+today,
+          title:e.ticker+" sous l'alerte achat", body:fmtp+" ≤ $"+ab});
+      }
+      if(e.alertSell!=null && p>=e.alertSell){
+        cgiNotifPush({type:"alert",emoji:"🔺",dedupeKey:"alertsell_"+e.ticker+"_"+today,
+          title:e.ticker+" au-dessus de l'alerte vente", body:fmtp+" ≥ $"+e.alertSell});
+      }
+    });
+  }
   function getScore(e){ return (e.conditions||[]).filter(function(c){return c.validated;}).length; }
   function scoreEmoji(s,total){
     if(total===0) return "";
@@ -6931,6 +6948,10 @@ function PageWatchlist({ EFF, hidden }){
             // Trouver la news source
             var sourceIdx=Object.keys(aiResult).find(function(k){return (aiResult[k]||[]).indexOf(c.id)>=0;});
             var sourceNews=sourceIdx!=null?r.news[parseInt(sourceIdx)]:null;
+            cgiNotifPush({type:"ai",emoji:"🤖",telegram:true,
+              dedupeKey:"ai_"+entry.ticker+"_"+c.id,
+              title:entry.ticker+" — condition validée par l'IA",
+              body:c.text+(sourceNews?("\n↗ "+sourceNews.title):"")});
             return {...c,validated:true,autoValidated:true,
               validatedBy:sourceNews?{title:sourceNews.title,url:sourceNews.url,time:sourceNews.time}:null};
           }
@@ -7076,7 +7097,13 @@ function PageWatchlist({ EFF, hidden }){
       var res=cgiEvalTechnical(c,seriesByUnit);
       if(res==null) return c;
       checked++;
-      if(res.ok){ validated++; return {...c,validated:true,autoValidated:true,validatedBy:{type:"technique",detail:res.detail,time:Date.now()}}; }
+      if(res.ok){ validated++;
+        if(!c.validated){ cgiNotifPush({type:"tech",emoji:"📈",telegram:true,
+          dedupeKey:"tech_"+entry.ticker+"_"+c.id+"_"+new Date().toISOString().slice(0,10),
+          title:entry.ticker+" — condition technique validée",
+          body:c.text+"\n"+res.detail}); }
+        return {...c,validated:true,autoValidated:true,validatedBy:{type:"technique",detail:res.detail,time:Date.now()}};
+      }
       if(c.autoValidated && c.validatedBy && c.validatedBy.type==="technique"){ return {...c,validated:false,autoValidated:false,validatedBy:null}; }
       return c;
     });
@@ -7992,6 +8019,178 @@ function recomputeGcFromDB(gcArr, ddArr, invArr){
     return [d, parseFloat((c/(u*p)).toFixed(4))].concat(r.slice(2));
   });
 }
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI v4.0 — P2 : NOTIFICATIONS + TELEGRAM
+// ══════════════════════════════════════════════════════════════════════════════
+var CGI_NOTIF_KEY = 'cgi_notifications'; // localStorage dédié (hors gros conteneur)
+
+function cgiNotifLoad(){ try{ var r=JSON.parse(localStorage.getItem(CGI_NOTIF_KEY)||'[]'); return Array.isArray(r)?r:[]; }catch(e){ return []; } }
+function cgiNotifSaveRaw(arr){ try{ localStorage.setItem(CGI_NOTIF_KEY,JSON.stringify(arr.slice(0,80))); }catch(e){ console.warn('[notif] save failed:',e.message); } }
+function cgiNotifEmit(){ try{ window.dispatchEvent(new CustomEvent('cgi-notif')); }catch(e){} }
+
+async function cgiTelegramSend(text){
+  try{
+    var r=await fetch(CF_WORKER_URL+"/telegram-send",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+      body:JSON.stringify({text:text}),
+      signal:AbortSignal.timeout(10000)
+    });
+    return r.ok;
+  }catch(e){ return false; }
+}
+
+// n = { type, emoji, title, body, dedupeKey?, telegram? }
+function cgiNotifPush(n){
+  var arr=cgiNotifLoad();
+  if(n.dedupeKey && arr.some(function(x){return x.dedupeKey===n.dedupeKey;})) return false;
+  var notif={
+    id:'n_'+Date.now()+'_'+Math.floor(Math.random()*10000),
+    type:n.type||'info', emoji:n.emoji||'🔔',
+    title:n.title||'', body:n.body||'',
+    ts:Date.now(), read:false, dedupeKey:n.dedupeKey||null
+  };
+  arr.unshift(notif);
+  cgiNotifSaveRaw(arr);
+  cgiNotifEmit();
+  if(n.telegram){ cgiTelegramSend((n.emoji||'🔔')+' '+(n.title||'')+(n.body?"\n"+n.body:"")); }
+  return true;
+}
+function cgiNotifMarkAllRead(){ var a=cgiNotifLoad(); var any=a.some(function(x){return !x.read;}); if(!any) return; cgiNotifSaveRaw(a.map(function(x){return {...x,read:true};})); cgiNotifEmit(); }
+function cgiNotifClear(){ cgiNotifSaveRaw([]); cgiNotifEmit(); }
+function cgiNotifTimeAgo(ts){
+  var s=Math.floor((Date.now()-ts)/1000);
+  if(s<60) return "à l'instant";
+  if(s<3600) return Math.floor(s/60)+" min";
+  if(s<86400) return Math.floor(s/3600)+" h";
+  return Math.floor(s/86400)+" j";
+}
+
+function NotifBell(){
+  const[open,setOpen]   = useState(false);
+  const[items,setItems] = useState(cgiNotifLoad());
+  const[view,setView]   = useState("list"); // "list" | "settings"
+  const[tgToken,setTgToken] = useState("");
+  const[tgChat,setTgChat]   = useState("");
+  const[tgStatus,setTgStatus] = useState(null);
+  const[tgMsg,setTgMsg]     = useState("");
+
+  useEffect(function(){
+    function refresh(){ setItems(cgiNotifLoad()); }
+    window.addEventListener('cgi-notif',refresh);
+    return function(){ window.removeEventListener('cgi-notif',refresh); };
+  },[]);
+
+  useEffect(function(){
+    if(open && view==="settings" && tgStatus==null){
+      fetch(CF_WORKER_URL+"/telegram-config",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
+        .then(function(r){return r.json();})
+        .then(function(d){ setTgStatus(d); if(d&&d.chatId) setTgChat(d.chatId); })
+        .catch(function(){ setTgStatus({configured:false}); });
+    }
+  },[open,view]);
+
+  var unread=items.filter(function(x){return !x.read;}).length;
+  var C2=(typeof C!=="undefined")?C:{};
+  var bg=C2.bg2||"#11131A", border=C2.border||"#222", text=C2.text||"#EEE", gray=C2.text3||C2.gray||"#888";
+  var green=C2.green||"#22C55E", red=C2.red||"#EF4444", blue=C2.blue||"#3B82F6", btc=C2.btc||"#F7931A";
+
+  function closePanel(){ setOpen(false); cgiNotifMarkAllRead(); }
+
+  async function saveTg(){
+    if(!tgToken.trim()||!tgChat.trim()){ setTgMsg("Token et Chat ID requis."); return; }
+    setTgMsg("Enregistrement…");
+    try{
+      var r=await fetch(CF_WORKER_URL+"/telegram-config",{
+        method:"POST",headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+        body:JSON.stringify({token:tgToken.trim(),chatId:tgChat.trim()}),signal:AbortSignal.timeout(10000)});
+      var d=await r.json();
+      if(d.ok){ setTgMsg("✓ Enregistré dans le KV."); setTgToken(""); setTgStatus({configured:true,chatId:tgChat.trim()}); }
+      else setTgMsg("Erreur : "+(d.error||"inconnue"));
+    }catch(e){ setTgMsg("Erreur réseau."); }
+  }
+  async function testTg(){
+    setTgMsg("Envoi du test…");
+    var ok=await cgiTelegramSend("✅ Test CGI — les notifications Telegram fonctionnent.");
+    setTgMsg(ok?"✓ Message de test envoyé.":"Échec : vérifie la config / le redéploiement du worker.");
+  }
+
+  var inp={width:"100%",background:C2.bg||"#07080D",border:"1px solid "+border,borderRadius:8,padding:"8px 10px",color:text,fontSize:13,boxSizing:"border-box"};
+  var lbl={display:"block",fontSize:11,color:gray,marginBottom:4};
+
+  // ── Bouton cloche (fixe, haut-droite) ──
+  var bell=React.createElement("button",{
+    onClick:function(){ setOpen(true); },
+    "aria-label":"Notifications",
+    style:{position:"fixed",top:10,right:12,zIndex:200,width:38,height:38,borderRadius:"50%",
+      background:bg,border:"1px solid "+border,color:text,fontSize:18,cursor:"pointer",
+      display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0006"}
+  },
+    "🔔",
+    unread>0&&React.createElement("span",{style:{position:"absolute",top:-4,right:-4,minWidth:18,height:18,padding:"0 4px",
+      borderRadius:9,background:red,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid "+(C2.bg||"#07080D")}},
+      unread>9?"9+":unread)
+  );
+
+  if(!open) return bell;
+
+  // ── Panel ──
+  var headerTabs=React.createElement("div",{style:{display:"flex",gap:6}},
+    React.createElement("button",{onClick:function(){setView("list");},style:{background:view==="list"?btc:bg,border:"1px solid "+(view==="list"?btc:border),borderRadius:8,padding:"4px 10px",color:view==="list"?"#000":gray,fontSize:11,fontWeight:700,cursor:"pointer"}},"Notifications"),
+    React.createElement("button",{onClick:function(){setView("settings");},style:{background:view==="settings"?btc:bg,border:"1px solid "+(view==="settings"?btc:border),borderRadius:8,padding:"4px 10px",color:view==="settings"?"#000":gray,fontSize:11,fontWeight:700,cursor:"pointer"}},"⚙️ Telegram")
+  );
+
+  var listView=React.createElement("div",{style:{overflowY:"auto",flex:1,padding:"0 12px 12px"}},
+    items.length===0
+      ? React.createElement("div",{style:{textAlign:"center",padding:36,color:gray,fontSize:13}},"Aucune notification.")
+      : items.map(function(n){
+          return React.createElement("div",{key:n.id,style:{display:"flex",gap:10,padding:"10px 8px",borderBottom:"1px solid "+border,opacity:n.read?0.62:1}},
+            React.createElement("span",{style:{fontSize:18,flexShrink:0,marginTop:1}},n.emoji||"🔔"),
+            React.createElement("div",{style:{flex:1,minWidth:0}},
+              React.createElement("div",{style:{fontSize:13,fontWeight:700,color:text}},n.title),
+              n.body&&React.createElement("div",{style:{fontSize:11,color:gray,lineHeight:1.4,marginTop:2,whiteSpace:"pre-wrap"}},n.body)
+            ),
+            React.createElement("span",{style:{fontSize:9,color:gray,flexShrink:0,marginTop:2}},cgiNotifTimeAgo(n.ts)),
+            !n.read&&React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:blue,flexShrink:0,marginTop:5}})
+          );
+        })
+  );
+
+  var settingsView=React.createElement("div",{style:{overflowY:"auto",flex:1,padding:"4px 16px 16px"}},
+    React.createElement("div",{style:{fontSize:11,color:gray,marginBottom:12,lineHeight:1.5}},
+      "Le token est stocké dans le KV Cloudflare (jamais sur GitHub). Renseigne-le une fois ici."),
+    tgStatus&&React.createElement("div",{style:{fontSize:11,marginBottom:12,color:tgStatus.configured?green:gray}},
+      tgStatus.configured?("✓ Configuré"+(tgStatus.chatId?(" · chat "+tgStatus.chatId):"")+(tgStatus.tokenHint?(" · token "+tgStatus.tokenHint):"")):"Non configuré"),
+    React.createElement("label",{style:lbl},"Bot Token"),
+    React.createElement("input",{value:tgToken,placeholder:"123456:ABC… (collé une fois)",onChange:function(e){setTgToken(e.target.value);},style:{...inp,marginBottom:10}}),
+    React.createElement("label",{style:lbl},"Chat ID"),
+    React.createElement("input",{value:tgChat,placeholder:"7592951435",onChange:function(e){setTgChat(e.target.value);},style:{...inp,marginBottom:14}}),
+    React.createElement("div",{style:{display:"flex",gap:8}},
+      React.createElement("button",{onClick:saveTg,style:{flex:1,background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:800,cursor:"pointer"}},"Enregistrer"),
+      React.createElement("button",{onClick:testTg,style:{flex:"0 0 110px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:blue,fontSize:13,fontWeight:700,cursor:"pointer"}},"Tester")
+    ),
+    tgMsg&&React.createElement("div",{style:{fontSize:11,color:tgMsg.indexOf("✓")>=0?green:(tgMsg.indexOf("Err")>=0||tgMsg.indexOf("Échec")>=0?red:gray),marginTop:10}},tgMsg)
+  );
+
+  var panel=ReactDOM.createPortal(React.createElement("div",{
+    style:{position:"fixed",inset:0,background:"#000C",zIndex:9997,display:"flex",alignItems:"flex-end"},
+    onClick:function(ev){ if(ev.target===ev.currentTarget) closePanel(); }
+  },
+    React.createElement("div",{style:{background:C2.bg||"#07080D",border:"1px solid "+border,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:520,margin:"0 auto",maxHeight:"85vh",display:"flex",flexDirection:"column"}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px 10px",flexShrink:0,gap:8}},
+        headerTabs,
+        React.createElement("div",{style:{display:"flex",gap:6,alignItems:"center"}},
+          view==="list"&&items.length>0&&React.createElement("button",{onClick:cgiNotifClear,style:{background:"none",border:"1px solid "+border,borderRadius:8,padding:"4px 8px",color:gray,fontSize:10,cursor:"pointer"}},"Vider"),
+          React.createElement("button",{onClick:closePanel,style:{background:"none",border:"none",color:gray,fontSize:22,cursor:"pointer",lineHeight:1}},"×")
+        )
+      ),
+      view==="list"?listView:settingsView
+    )
+  ),document.body);
+
+  return React.createElement(React.Fragment,null,bell,panel);
+}
+
 function App(){
   const[tab,setTab]=useState(0);
   const[chartData,setChartData]=useState(CHART_MONTHLY);
@@ -8020,6 +8219,39 @@ function App(){
   const bumpIconDb = () => setIconDbVersion(v=>v+1);
   const[txns,setTxns]=useState(SEED_TXNS_REAL);
   const[ready,setReady]=useState(false);
+  // v4.0 P2 — notifications patrimoine + dernier trade clôturé (dédupliquées)
+  useEffect(function(){
+    try{
+      var dd=liveDD||[];
+      if(dd.length>=2){
+        var lastRow=dd[dd.length-1];
+        var lastTot=lastRow&&lastRow[2], lastDate=lastRow&&lastRow[0];
+        if(lastTot){
+          var prevTot=dd[dd.length-2][2];
+          var weekTot=null, lim=new Date(lastDate); lim.setDate(lim.getDate()-7);
+          for(var i=dd.length-2;i>=0;i--){ if(new Date(dd[i][0])<=lim){ weekTot=dd[i][2]; break; } }
+          if(weekTot==null && dd.length>=6) weekTot=dd[dd.length-6][2];
+          var dPct=prevTot?((lastTot-prevTot)/prevTot*100):null;
+          var wPct=weekTot?((lastTot-weekTot)/weekTot*100):null;
+          var body="Total : "+Math.round(lastTot).toLocaleString("fr-FR")+" €";
+          if(dPct!=null) body+="\nJour : "+(dPct>=0?"+":"")+dPct.toFixed(2)+"%";
+          if(wPct!=null) body+="\nSemaine : "+(wPct>=0?"+":"")+wPct.toFixed(2)+"%";
+          cgiNotifPush({type:"meteo",emoji:(dPct!=null?(dPct>=0?"📈":"📉"):"🌤️"),
+            dedupeKey:"meteo_"+lastDate, title:"Météo patrimoine", body:body});
+        }
+      }
+      var closed=(computeClosedTrades(txns||[]).closed)||[];
+      if(closed.length){
+        var t=closed.slice().sort(function(a,b){return new Date(b.exitDate)-new Date(a.exitDate);})[0];
+        if(t&&t.exitDate){
+          var up=t.pnlUSD>=0;
+          cgiNotifPush({type:"trade",emoji:up?"✅":"❌",dedupeKey:"trade_"+t.ticker+"_"+t.exitDate,
+            title:"Trade clôturé : "+t.ticker,
+            body:(up?"+":"")+"$"+Math.round(t.pnlUSD).toLocaleString("fr-FR")+(t.pct!=null?(" ("+(up?"+":"")+t.pct.toFixed(1)+"%)"):"")+" · "+t.exitDate});
+        }
+      }
+    }catch(e){}
+  },[liveDD,txns]);
   const[showSnap,setShowSnap]=useState(false);
   const[showTrade,setShowTrade]=useState(false);
   const[eur,setEur]=useState(false);
@@ -9419,6 +9651,7 @@ function App(){
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
+      <NotifBell />
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
         {TABS.map((lb,i)=>(
           <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.btc:C.text3,transition:"color .15s"}}>
