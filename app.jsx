@@ -8112,8 +8112,7 @@ function NotifBell(){
       else setTgMsg("Erreur : "+(d.error||("HTTP "+r.status)));
     }catch(e){ setTgMsg("Erreur réseau (worker injoignable ?)."); }
   }
-  async function testTg(){
-    setTgMsg("Envoi du test…");
+  async function testTg(){    setTgMsg("Envoi du test…");
     // Si un token est saisi, on l'enregistre d'abord (Tester lit le KV, pas le formulaire)
     var tk=tgToken.replace(/\s+/g,"");
     if(tk){
@@ -8129,6 +8128,15 @@ function NotifBell(){
     }
     var res=await cgiTelegramSend("Test CGI — notifications Telegram operationnelles.");
     setTgMsg(res.ok ? "✓ Message de test envoyé." : ("Échec : "+(res.error||"inconnu")));
+  }
+  async function forceCheck(){
+    setTgMsg("🔄 Vérification en cours…");
+    try{
+      var r=await fetch(CF_WORKER_URL+"/check-now",{method:"POST",
+        headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(20000)});
+      var d=await r.json();
+      setTgMsg(d.ok?"✓ Vérification lancée — regarde Telegram.":("Erreur : "+(d.error||("HTTP "+r.status))));
+    }catch(e){ setTgMsg("Erreur réseau (worker redéployé ?)."); }
   }
 
   var inp={width:"100%",background:C2.bg||"#07080D",border:"1px solid "+border,borderRadius:8,padding:"8px 10px",color:text,fontSize:13,boxSizing:"border-box"};
@@ -8183,7 +8191,8 @@ function NotifBell(){
     React.createElement("input",{value:tgChat,placeholder:"7592951435",onChange:function(e){setTgChat(e.target.value);},style:{...inp,marginBottom:14}}),
     React.createElement("div",{style:{display:"flex",gap:8}},
       React.createElement("button",{onClick:saveTg,style:{flex:1,background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:800,cursor:"pointer"}},"Enregistrer"),
-      React.createElement("button",{onClick:testTg,style:{flex:"0 0 110px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:blue,fontSize:13,fontWeight:700,cursor:"pointer"}},"Tester")
+      React.createElement("button",{onClick:testTg,style:{flex:"0 0 80px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:blue,fontSize:13,fontWeight:700,cursor:"pointer"}},"Tester"),
+      React.createElement("button",{onClick:forceCheck,style:{flex:"0 0 100px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:green,fontSize:12,fontWeight:700,cursor:"pointer"}},"🔄 Forcer")
     ),
     tgMsg&&React.createElement("div",{style:{fontSize:11,color:tgMsg.indexOf("✓")>=0?green:(tgMsg.indexOf("Err")>=0||tgMsg.indexOf("Échec")>=0?red:gray),marginTop:10}},tgMsg)
   );
