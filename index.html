@@ -55,9 +55,11 @@
   <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- TradingView Lightweight Charts (graphique chandeliers + zones) -->
+  <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
   <!-- Donnees en dur chargees en script simple (non-Babel) : parse natif rapide -->
   <script src="seeds.js?v=2.07"></script>
-  <script type="text/babel" data-presets="react" src="app.jsx?v=4.4"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=4.5"></script>
   <script>
     // Le splash reste affiche (logo + barre animes) jusqu'a ce que l'app React soit prete :
     // c'est l'app qui retire #loader quand le chargement des donnees est termine.
