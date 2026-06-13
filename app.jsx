@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.6";
+const APP_VERSION = "v4.7";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -6905,6 +6905,156 @@ function LWChart(props){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — BtcIndicators : dashboard d'indicateurs BTC (porté de GDB & Sons v27.50)
+//   backend /btc-signals (prix, Puell, Hash Ribbons, F&G) + on-chain client (bitcoin-data.com)
+// ══════════════════════════════════════════════════════════════════════════════
+function BtcIndicators(){
+  const[btcSig,setBtcSig]=useState(null);
+  const[btcSigL,setBtcSigL]=useState(false);
+  const[btcSigE,setBtcSigE]=useState(null);
+  const[btcOpen,setBtcOpen]=useState({});
+  function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
+  function btcHeatColor(h){ return h==null?C.gray:(h<40?C.green:(h<60?C.gold:(h<80?C.orange:C.red))); }
+
+  function fetchOnchainBtc(force){
+    var CK="gdb_btc_onchain_v1";
+    var OC=[
+      {key:"mvrvz",slugs:["mvrv-zscore"]},
+      {key:"nupl",slugs:["nupl"]},
+      {key:"reserverisk",slugs:["reserve-risk"]},
+      {key:"rhodl",slugs:["rhodl-ratio"]},
+      {key:"sthmvrv",slugs:["sth-mvrv"]},
+      {key:"asopr",slugs:["asopr","sopr"]},
+      {key:"vdd",slugs:["vdd-multiple","value-days-destroyed-multiple","vdd"]}
+    ];
+    var cached={}, cachedTs=0;
+    try{ var raw=localStorage.getItem(CK); if(raw){ var pj=JSON.parse(raw); cached=pj.vals||{}; cachedTs=pj.ts||0; } }catch(e){}
+    var fresh=(Date.now()-cachedTs)<6*3600*1000;
+    var haveAll=OC.every(function(m){ return cached[m.key]!=null; });
+    if(!force && fresh && haveAll) return Promise.resolve(Object.assign({},cached));
+    var pick=function(d){ if(!d||typeof d!=="object")return null; for(var k in d){ if(/^(d|unixts|theday|date|time)$/i.test(k))continue; if(/(1m|1w|7d|14d|30d|90d|sma|ema)$/i.test(k))continue; var n=parseFloat(d[k]); if(isFinite(n))return n; } return null; };
+    var sleep=function(ms){ return new Promise(function(r){ setTimeout(r,ms); }); };
+    var out=Object.assign({},cached);
+    var seq=OC.reduce(function(prev,m){
+      return prev.then(function(){
+        var attempt=function(i,retried){
+          if(i>=m.slugs.length) return Promise.resolve(null);
+          return fetch("https://bitcoin-data.com/v1/"+m.slugs[i]+"/last",{headers:{Accept:"application/json"}})
+            .then(function(r){
+              if(r.status===429){ return (!retried? sleep(700).then(function(){return attempt(i,true);}) : attempt(i+1,false)); }
+              if(!r.ok) return attempt(i+1,false);
+              return r.json().then(function(d){ if(Array.isArray(d))d=d[d.length-1]; var v=pick(d); return v!=null?v:attempt(i+1,false); });
+            })
+            .catch(function(){ return (!retried? sleep(500).then(function(){return attempt(i,true);}) : null); });
+        };
+        return attempt(0,false).then(function(v){ if(v!=null) out[m.key]=v; return sleep(250); });
+      });
+    }, Promise.resolve());
+    return seq.then(function(){
+      try{ localStorage.setItem(CK, JSON.stringify({ts:Date.now(), vals:out})); }catch(e){}
+      return out;
+    });
+  }
+
+  function loadBtc(noCache){
+    setBtcSigL(true); setBtcSigE(null);
+    fetch(CF_WORKER_URL+"/btc-signals"+(noCache?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(25000)})
+      .then(function(r){return r.json();})
+      .then(function(d){
+        if(d&&d.error){ setBtcSigE(String(d.error)); setBtcSigL(false); return; }
+        var cl=function(v,lo,hi){ return Math.max(0,Math.min(100,(v-lo)/(hi-lo)*100)); };
+        var finish=function(oc){
+          var ind=(d.indicators||[]).map(function(o){ return Object.assign({},o); });
+          var byk={}; ind.forEach(function(o){ byk[o.key]=o; });
+          var patch=function(key,val,heat,zone){ var it=byk[key]; if(it){ it.value=val; it.heat=heat; it.zone=zone; } };
+          var lg=function(v){ return Math.log(v)/Math.LN10; };
+          if(oc.mvrvz!=null){ var a=oc.mvrvz; patch("mvrvz",a.toFixed(2),cl(a,0,7),a<1?"Bas — accumulation/bottom":a>7?"Très au-dessus — top":"Neutre"); }
+          if(oc.nupl!=null){ var b=oc.nupl; patch("nupl",b.toFixed(2),cl(b,0,0.75),b<0?"Capitulation":b<0.25?"Espoir":b<0.5?"Optimisme":b<0.75?"Croyance":"Euphorie"); }
+          if(oc.reserverisk!=null){ var c=oc.reserverisk; patch("reserverisk",c.toFixed(4),cl(c,0.001,0.02),c<0.002?"Confiance forte, prix bas — achat":c>0.02?"Risque élevé — vente":"Neutre"); }
+          if(oc.rhodl!=null){ var e=oc.rhodl; patch("rhodl",String(Math.round(e)),(e>0?cl(lg(e),2.60,4.48):null),e<2000?"Bas — accumulation":e>20000?"Surchauffe — top":"Neutre"); }
+          if(oc.sthmvrv!=null){ var g=oc.sthmvrv; patch("sthmvrv",g.toFixed(2),cl(g,0.85,1.5),g<0.9?"Détenteurs court terme en perte — bottom":g>1.35?"Surchauffe locale — top":"Neutre"); }
+          if(oc.asopr!=null){ var h=oc.asopr; patch("asopr",h.toFixed(3),cl(h,0.97,1.06),h<1?"Vendeurs en perte — capitulation":h>1.04?"Prise de profit soutenue":"Neutre"); }
+          if(oc.vdd!=null){ var j=oc.vdd; patch("vdd",j.toFixed(2),cl(j,0.6,2.9),j<0.6?"Faible — bottom":j>2.9?"Distribution — top":"Neutre"); }
+          ind.forEach(function(o){ o.color=btcHeatColor(o.heat); });
+          var sw=0,swh=0,nok=0; ind.forEach(function(o){ if(o.heat!=null){ sw+=o.weight; swh+=o.heat*o.weight; nok++; } });
+          var ah=sw>0?swh/sw:null;
+          var reco=ah==null?null:(ah<25?"Acheter":ah<40?"Accumuler":ah<60?"Conserver":ah<80?"Alléger":"Vendre");
+          setBtcSig(Object.assign({},d,{indicators:ind,aggHeat:ah,reco:reco,recoColor:btcHeatColor(ah),nIndicators:nok}));
+          setBtcSigL(false);
+        };
+        fetchOnchainBtc(noCache).then(finish).catch(function(){ finish({}); });
+      })
+      .catch(function(e){ setBtcSigE((e&&e.message)||"Erreur réseau"); setBtcSigL(false); });
+  }
+  useEffect(function(){ loadBtc(false); },[]);
+
+  if(btcSigL && !btcSig) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
+  if(btcSigE && !btcSig) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+    "Erreur : "+btcSigE,
+    React.createElement("button",{onClick:function(){loadBtc(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
+  );
+  if(!btcSig) return null;
+  var d=btcSig;
+  var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
+  var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
+  var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed"]]];
+  var tog=function(k){ setBtcOpen(function(p){ var n=Object.assign({},p); n[k]=!p[k]; return n; }); };
+  var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+
+  return React.createElement("div",null,
+    React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:14,padding:"14px 16px",marginBottom:16}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+        React.createElement("div",null,
+          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Recommandation"),
+          React.createElement("div",{style:{fontSize:28,fontWeight:800,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
+        ),
+        React.createElement("div",{style:{textAlign:"right"}},
+          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Surchauffe"),
+          React.createElement("div",{style:{fontSize:24,fontWeight:800,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontSize:12,fontWeight:600,color:C.text2}},"/100"))
+        )
+      ),
+      React.createElement("div",{style:{position:"relative",height:8,borderRadius:5,marginTop:12,background:grad}},
+        d.aggHeat!=null&&React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,d.aggHeat))+"% - 7px)",width:14,height:14,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
+      ),
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.text3,marginTop:6}},
+        React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
+      ),
+      React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj)
+    ),
+    groups.map(function(g,gi){
+      return React.createElement("div",{key:gi,style:{marginBottom:14}},
+        React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},g[0]),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+          g[1].map(function(k){
+            var o=byKey[k]; if(!o) return null; var open=!!btcOpen[k];
+            return React.createElement("div",{key:k,style:{background:C.bg1,border:"1px solid "+C.border,borderLeft:"3px solid "+o.color,borderRadius:10,overflow:"hidden"}},
+              React.createElement("div",{onClick:function(){tog(k);},style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:"pointer",gap:8}},
+                React.createElement("div",{style:{minWidth:0}},
+                  React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},o.name),
+                  React.createElement("div",{style:{fontSize:10,color:o.color,marginTop:2,fontWeight:600}},o.zone)
+                ),
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
+                  React.createElement("span",{style:{fontSize:15,fontWeight:800,color:C.text}},o.value),
+                  React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:o.color,flexShrink:0}}),
+                  React.createElement("span",{style:{fontSize:10,color:C.text3}},open?"▾":"▸")
+                )
+              ),
+              open&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+C.border}},
+                o.heat!=null&&React.createElement("div",{style:{position:"relative",height:6,borderRadius:4,margin:"12px 0 6px",background:grad}},
+                  React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,o.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
+                ),
+                React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:8}},o.explain)
+              )
+            );
+          })
+        )
+      );
+    }),
+    React.createElement("div",{style:{fontSize:10,color:C.text3,lineHeight:1.5,marginTop:6,padding:"0 2px"}},"Agrégat mécanique d'indicateurs publics (prix, on-chain, sentiment) à visée éducative. Ce n'est pas un conseil en investissement.")
+  );
+}
+
 function PageWatchlist({ EFF, hidden }){
   var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
   var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
@@ -6924,6 +7074,8 @@ function PageWatchlist({ EFF, hidden }){
   const[condLib,setCondLib]   = useState([]);    // v4.0 biblio "personnalisée"
   const[iconTick,setIconTick] = useState(0);     // v4.0 LOT2 — rafraîchit les logos
   const[showChart,setShowChart]=useState(false); // v4.0 LOT4 — graphique dans le modal
+  const[showTools,setShowTools]=useState(false);  // v4.7 — menu Outils (News/Tech/Indicateurs)
+  const[showIndic,setShowIndic]=useState(false);  // v4.7 — feuille indicateurs BTC
   const[pickMode,setPickMode] =useState(null);   // "low"|"high"|"sell"|null
   // v4.0 LOT2 — backfill best-effort des logos manquants (1× par session)
   useEffect(function(){
@@ -7472,12 +7624,30 @@ function PageWatchlist({ EFF, hidden }){
         React.createElement("div",{style:{fontSize:20,fontWeight:900,color:textC}},"Suivi de marché"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
-      React.createElement("div",{style:{display:"flex",gap:6}},
-        React.createElement("button",{onClick:fetchNews,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},"📰 News"),
-        React.createElement("button",{onClick:verifyTechnicalAll,disabled:techBusy,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:techBusy?grayC:greenC,fontSize:11,fontWeight:700,cursor:"pointer"}},techBusy?"📈 ...":"📈 Tech"),
+      React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
+        React.createElement("button",{onClick:function(){setShowTools(function(v){return !v;});},style:{background:showTools?blueC+"22":cardBg,border:"1px solid "+(showTools?blueC:borderC),borderRadius:8,padding:"6px 10px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},"🛠 Outils ▾"),
+        showTools&&React.createElement("div",{style:{position:"absolute",top:36,right:46,zIndex:50,background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:6,minWidth:170,boxShadow:"0 8px 24px #000a",display:"flex",flexDirection:"column",gap:2}},
+          React.createElement("button",{onClick:function(){setShowTools(false);fetchNews();},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📰 Analyser les news (IA)"),
+          React.createElement("button",{onClick:function(){setShowTools(false);verifyTechnicalAll();},disabled:techBusy,style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:techBusy?grayC:greenC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},techBusy?"📈 Vérification…":"📈 Vérifier le technique"),
+          React.createElement("button",{onClick:function(){setShowTools(false);setShowIndic(true);},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:orangeC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📊 Indicateurs marché")
+        ),
         React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:loading?grayC:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},loading?"⟳ ...":"⟳"),
         React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},"+")
       )
+    ),
+
+    // ── v4.7 — Feuille indicateurs marché (dashboard BTC) ─────────────────────
+    showIndic&&ReactDOM.createPortal(
+      React.createElement("div",{style:{position:"fixed",inset:0,zIndex:9996,background:C.bg,display:"flex",flexDirection:"column"}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:"1px solid "+borderC,flexShrink:0}},
+          React.createElement("div",{style:{fontSize:15,fontWeight:800,color:textC}},"📊 Indicateurs marché"),
+          React.createElement("button",{onClick:function(){setShowIndic(false);},style:{background:"none",border:"none",color:grayC,fontSize:24,cursor:"pointer",lineHeight:1}},"×")
+        ),
+        React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"14px 16px 30px"}},
+          React.createElement(BtcIndicators,null)
+        )
+      ),
+      document.body
     ),
 
     // ── Bandeau retour vérif technique (v4.0) ─────────────────────────────────
