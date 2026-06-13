@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v3.03";
+const APP_VERSION = "v4.4";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -8142,13 +8142,15 @@ function NotifBell(){
   var inp={width:"100%",background:C2.bg||"#07080D",border:"1px solid "+border,borderRadius:8,padding:"8px 10px",color:text,fontSize:13,boxSizing:"border-box"};
   var lbl={display:"block",fontSize:11,color:gray,marginBottom:4};
 
-  // ── Bouton cloche (fixe, haut-droite) ──
+  // ── Bouton cloche (inline dans le header, ou flottant en repli) ──
+  var inline=!!(arguments[0]&&arguments[0].inline);
+  var bellStyle=inline
+    ? {position:"relative",width:32,height:32,borderRadius:C2.radiusSm||6,background:bg,border:"1px solid "+border,color:text,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}
+    : {position:"fixed",top:10,right:12,zIndex:200,width:38,height:38,borderRadius:"50%",background:bg,border:"1px solid "+border,color:text,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0006"};
   var bell=React.createElement("button",{
     onClick:function(){ setOpen(true); },
     "aria-label":"Notifications",
-    style:{position:"fixed",top:10,right:12,zIndex:200,width:38,height:38,borderRadius:"50%",
-      background:bg,border:"1px solid "+border,color:text,fontSize:18,cursor:"pointer",
-      display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0006"}
+    style:bellStyle
   },
     "🔔",
     unread>0&&React.createElement("span",{style:{position:"absolute",top:-4,right:-4,minWidth:18,height:18,padding:"0 4px",
@@ -8316,6 +8318,17 @@ function App(){
     try{ return localStorage.getItem('cgi_theme')||'dark'; }catch{ return 'dark'; }
   });
   const[showTheme,setShowTheme]=useState(false);
+  const[showSettings,setShowSettings]=useState(false); // LOT1 — panneau réglages
+  const[settingsMsg,setSettingsMsg]=useState("");
+  async function forceCronCheck(){
+    setSettingsMsg("🔄 Vérification en cours…");
+    try{
+      const r=await fetch(CF_WORKER_URL+"/check-now",{method:"POST",headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(20000)});
+      const d=await r.json();
+      setSettingsMsg(d.ok?"✓ Vérification lancée — regarde Telegram.":("Erreur : "+(d.error||("HTTP "+r.status))));
+    }catch(e){ setSettingsMsg("Erreur réseau (worker redéployé ?)."); }
+    setTimeout(()=>setSettingsMsg(""),5000);
+  }
   // ── Écran de démarrage ──────────────────────────────────────────────────
   const[startScreen,setStartScreen]=useState(true); // afficher l'écran de choix
   const[startLoading,setStartLoading]=useState(true); // en train de charger les 2 sources
@@ -8942,41 +8955,7 @@ function App(){
   const pullActive=useRef(false);
   const PULL_THRESHOLD=50; // réduit de 70 à 50 pour plus de réactivité
 
-  useEffect(()=>{
-    const onTouchStart=e=>{
-      // Activer dès que scroll = 0, peu importe la position précise
-      if(window.scrollY<=2){
-        pullStartY.current=e.touches[0].clientY;
-        pullActive.current=true;
-      }
-    };
-    const onTouchMove=e=>{
-      if(!pullActive.current) return;
-      const dy=e.touches[0].clientY-pullStartY.current;
-      if(dy>0 && window.scrollY<=2){
-        setPullY(Math.min(dy*0.6, PULL_THRESHOLD+30)); // résistance augmentée 0.5→0.6
-        if(dy>5) e.preventDefault(); // seuil réduit 10→5
-      } else if(dy<=0){
-        pullActive.current=false;
-        setPullY(0);
-      }
-    };
-    const onTouchEnd=()=>{
-      if(pullActive.current && pullY>=PULL_THRESHOLD && !refreshing){
-        handleRefresh();
-      }
-      pullActive.current=false;
-      setPullY(0);
-    };
-    window.addEventListener('touchstart',onTouchStart,{passive:true});
-    window.addEventListener('touchmove',onTouchMove,{passive:false});
-    window.addEventListener('touchend',onTouchEnd);
-    return()=>{
-      window.removeEventListener('touchstart',onTouchStart);
-      window.removeEventListener('touchmove',onTouchMove);
-      window.removeEventListener('touchend',onTouchEnd);
-    };
-  },[pullY,refreshing,handleRefresh]);
+  // LOT1 — pull-to-refresh retiré (le bouton ↺ du header suffit)
 
   function updateBasesFromSnapshot(snap, src, liveSeries){
     const log = [], errors = [];
@@ -9616,54 +9595,18 @@ function App(){
           <span style={{fontSize:9,fontWeight:700,color:C.btc,opacity:.8,fontFamily:"monospace",letterSpacing:.5}}>{APP_VERSION}</span>
         </div>
 
-        {/* Droite : €/$ 👁 🎨 */}
+        {/* Droite : 🔔 notifications + ⚙️ réglages (LOT1) */}
         <div style={{display:"flex",gap:9,alignItems:"center"}}>
-          <button onClick={()=>setEur(!eur)} title={eur?"Passer en dollars":"Passer en euros"} style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${eur ? C.green : C.gold}`,
-            background: eur ? C.green+"1A" : C.gold+"1A",
-            cursor:"pointer",fontSize:14,fontWeight:900,
-            color: eur ? C.green : C.gold,
-            display:"flex",alignItems:"center",justifyContent:"center",
-          }}>{eur?"$":"€"}</button>
-          <button onClick={()=>setHidden(!hidden)} title={hidden?"Afficher":"Masquer"} style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${hidden?C.btc:C.purple}`,
-            background:hidden?C.btc+"1A":C.purple+"1A",
-            cursor:"pointer",fontSize:15,color:hidden?C.btc:C.purple,
-            display:"flex",alignItems:"center",justifyContent:"center",
-          }}>{hidden?"🙈":"👁"}</button>
-          <button onClick={()=>setShowTheme(true)} title="Thème" style={{
+          <NotifBell inline/>
+          <button onClick={()=>setShowSettings(true)} title="Réglages" style={{
             width:32,height:32,borderRadius:C.radiusSm||6,
             border:`1.5px solid ${C.border}`,background:C.purple+"1A",
-            cursor:"pointer",fontSize:14,
+            cursor:"pointer",fontSize:15,
             display:"flex",alignItems:"center",justifyContent:"center",
-          }}>🎨</button>
+          }}>⚙️</button>
         </div>
       </div>
-      {/* ── Pull-to-refresh indicator ── */}
-      {(pullY>0||refreshing)&&(
-        <div style={{
-          position:"fixed",top:0,left:"50%",transform:"translateX(-50%)",
-          width:430,zIndex:200,display:"flex",justifyContent:"center",
-          paddingTop:Math.min(pullY,40)+4,
-          transition:pullY>0?"none":"all .3s ease",
-        }}>
-          <div style={{
-            width:34,height:34,borderRadius:"50%",
-            background:C.bg1,border:"1px solid "+C.border,
-            display:"flex",alignItems:"center",justifyContent:"center",
-            boxShadow:"0 2px 8px rgba(0,0,0,.3)",
-          }}>
-            <div style={{
-              fontSize:18,
-              transform:"rotate("+(refreshing?0:Math.min(pullY/PULL_THRESHOLD,1)*360)+"deg)",
-              animation:refreshing?"spin 0.8s linear infinite":"none",
-              color:pullY>=PULL_THRESHOLD||refreshing?C.btc:C.gray,
-            }}>↻</div>
-          </div>
-        </div>
-      )}
+      {/* ── Pull-to-refresh retiré (LOT1) ── */}
       <div style={{padding:"0 16px"}}>
         {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
@@ -9676,13 +9619,14 @@ function App(){
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
-      <NotifBell />
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
         {TABS.map((lb,i)=>(
+          i===4 ? null : (
           <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.btc:C.text3,transition:"color .15s"}}>
             <span style={{fontSize:20,lineHeight:1,display:"block"}}>{ICONS[i]}</span>
             <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{lb}</span>
           </button>
+          )
         ))}
       </div>
       {/* Buy & Sell accessible via snapshot uniquement */}
@@ -9832,6 +9776,53 @@ function App(){
                 color:C.green,fontSize:13,fontWeight:800,cursor:"pointer",
               }}>Fermer</button>
             )}
+          </div>
+        </div>
+      )}
+      {showSettings&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={()=>setShowSettings(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{
+            background:C.bg1,borderRadius:"20px 20px 0 0",padding:"20px 16px 36px",
+            width:"100%",maxWidth:430,border:`1px solid ${C.border}`,maxHeight:"85vh",overflowY:"auto",
+          }}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:14,fontWeight:800,color:C.text}}>⚙️ Réglages</div>
+              <button onClick={()=>setShowSettings(false)} style={{background:"none",border:"none",color:C.gray,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              <button onClick={()=>setEur(!eur)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>💱</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Devise d'affichage</span></span>
+                <span style={{fontSize:13,fontWeight:800,color:eur?C.green:C.gold}}>{eur?"EUR €":"USD $"}</span>
+              </button>
+              <button onClick={()=>setHidden(!hidden)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{hidden?"🙈":"👁"}</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Masquer les montants</span></span>
+                <span style={{fontSize:13,fontWeight:800,color:hidden?C.btc:C.gray}}>{hidden?"Masqué":"Visible"}</span>
+              </button>
+              <button onClick={()=>{setShowSettings(false);setShowTheme(true);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>🎨</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Thème</span></span>
+                <span style={{fontSize:12,color:C.gray}}>{themeName} ›</span>
+              </button>
+              <button onClick={()=>{setShowSettings(false);setTab(4);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>🗄️</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Base de données (Data)</span></span>
+                <span style={{fontSize:12,color:C.gray}}>›</span>
+              </button>
+              <button onClick={handleRefresh} disabled={refreshing} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:refreshing?"not-allowed":"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>↺</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Actualiser les prix</span></span>
+                <span style={{fontSize:12,color:refreshing?C.btc:C.gray}}>{refreshing?"…":"›"}</span>
+              </button>
+              <button onClick={forceCronCheck} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>🔄</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Forcer la vérification</span></span>
+                <span style={{fontSize:11,color:C.gray}}>alertes + technique ›</span>
+              </button>
+              <button onClick={()=>{setShowSettings(false);setShowGistDiag(true);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{gistSync?"☁︎":"✗"}</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Connexion Cloudflare KV</span></span>
+                <span style={{fontSize:12,color:gistSync?C.green:C.red}}>{gistSync?"Connecté":"Erreur"}</span>
+              </button>
+            </div>
+            {settingsMsg&&<div style={{fontSize:11,color:C.green,marginTop:12,textAlign:"center"}}>{settingsMsg}</div>}
+            <div style={{fontSize:10,color:C.text3,textAlign:"center",marginTop:16,opacity:.7}}>{APP_VERSION} · source : {chosenSource||"—"}</div>
           </div>
         </div>
       )}
